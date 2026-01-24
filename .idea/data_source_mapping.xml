@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DataSourcePerFileMappings">
+    <file url="file://$PROJECT_DIR$/queries/CHECKS.sql" value="686a19a3-c8f6-4c32-9d0c-0dbbc33adea7" />
+    <file url="file://$PROJECT_DIR$/queries/PROCEDURE.sql" value="686a19a3-c8f6-4c32-9d0c-0dbbc33adea7" />
+    <file url="file://$PROJECT_DIR$/queries/Query.sql" value="686a19a3-c8f6-4c32-9d0c-0dbbc33adea7" />
+    <file url="file://$PROJECT_DIR$/queries/TRIGGER.sql" value="686a19a3-c8f6-4c32-9d0c-0dbbc33adea7" />
+  </component>
+</project>
