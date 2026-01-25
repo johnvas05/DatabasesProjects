@@ -99,3 +99,13 @@ BEGIN
 END$$
 
 DELIMITER ;
+
+UPDATE reservation r
+    JOIN trip t ON r.res_tr_id = t.tr_id
+    JOIN customer c ON r.res_cust_id = c.cust_id
+SET r.res_total_cost = CASE
+    -- If customer is > 18 years old, charge Adult price
+                           WHEN DATEDIFF(CURDATE(), c.cust_birth_date) / 365.25 > 18 THEN t.tr_cost_adult
+    -- Otherwise, charge Child price
+                           ELSE t.tr_cost_child
+    END;
