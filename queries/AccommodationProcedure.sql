@@ -1,4 +1,4 @@
-USE baseisproject;
+USE `baseis project`;
 
 DELIMITER $$
 

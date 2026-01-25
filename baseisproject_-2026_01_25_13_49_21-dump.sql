@@ -1,8 +1,9 @@
 -- MySQL dump 10.13  Distrib 8.0.44, for Win64 (x86_64)
 --
--- Host: 127.0.0.1    Database: baseisproject
+-- Host: 127.0.0.1    Database: baseis project
 -- ------------------------------------------------------
 -- Server version	8.0.44
+
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -484,7 +485,7 @@ UNLOCK TABLES;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `trg_calculate_accommodation_cost` BEFORE INSERT ON `room_usage` FOR EACH ROW BEGIN
+/*!50003 CREATE*/ /*!50017 DEFINER=`Teo`@`localhost`*/ /*!50003 TRIGGER `trg_calculate_accommodation_cost` BEFORE INSERT ON `room_usage` FOR EACH ROW BEGIN
     DECLARE v_price_per_night DECIMAL(10,2);
     DECLARE v_nights INT;
 
@@ -586,7 +587,7 @@ UNLOCK TABLES;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `trg_log_trip_insert` AFTER INSERT ON `trip` FOR EACH ROW BEGIN
+/*!50003 CREATE*/ /*!50017 DEFINER=`Teo`@`localhost`*/ /*!50003 TRIGGER `trg_log_trip_insert` AFTER INSERT ON `trip` FOR EACH ROW BEGIN
     INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
     VALUES (USER(), 'trip', 'INSERT', CONCAT('New Trip ID: ', NEW.tr_id));
 END */;;
@@ -604,7 +605,7 @@ DELIMITER ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `trg_log_trip_update` AFTER UPDATE ON `trip` FOR EACH ROW BEGIN
+/*!50003 CREATE*/ /*!50017 DEFINER=`Teo`@`localhost`*/ /*!50003 TRIGGER `trg_log_trip_update` AFTER UPDATE ON `trip` FOR EACH ROW BEGIN
     INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
     VALUES (USER(), 'trip', 'UPDATE', CONCAT('Trip ID: ', OLD.tr_id, ' Status changed from ', OLD.tr_status, ' to ', NEW.tr_status));
 END */;;
@@ -622,7 +623,7 @@ DELIMITER ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `trg_complete_trip_vehicle_update` AFTER UPDATE ON `trip` FOR EACH ROW BEGIN
+/*!50003 CREATE*/ /*!50017 DEFINER=`Teo`@`localhost`*/ /*!50003 TRIGGER `trg_complete_trip_vehicle_update` AFTER UPDATE ON `trip` FOR EACH ROW BEGIN
     -- Check if status changed to COMPLETED
     IF NEW.tr_status = 'COMPLETED' AND OLD.tr_status != 'COMPLETED' THEN
 
@@ -649,7 +650,7 @@ DELIMITER ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `trg_log_trip_delete` AFTER DELETE ON `trip` FOR EACH ROW BEGIN
+/*!50003 CREATE*/ /*!50017 DEFINER=`Teo`@`localhost`*/ /*!50003 TRIGGER `trg_log_trip_delete` AFTER DELETE ON `trip` FOR EACH ROW BEGIN
     INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
     VALUES (USER(), 'trip', 'DELETE', CONCAT('Deleted Trip ID: ', OLD.tr_id));
 END */;;
@@ -770,7 +771,7 @@ UNLOCK TABLES;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `trg_worker_salary_increase` BEFORE UPDATE ON `worker` FOR EACH ROW BEGIN
+/*!50003 CREATE*/ /*!50017 DEFINER=`Teo`@`localhost`*/ /*!50003 TRIGGER `trg_worker_salary_increase` BEFORE UPDATE ON `worker` FOR EACH ROW BEGIN
     DECLARE v_revenue DECIMAL(10,2);
     DECLARE v_expenses DECIMAL(10,2);
     DECLARE v_profit_ratio DECIMAL(10,4);
@@ -824,7 +825,7 @@ DELIMITER ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_assign_vehicle_to_trip`(
+CREATE DEFINER=`Teo`@`localhost` PROCEDURE `sp_assign_vehicle_to_trip`(
     IN p_trip_id INT,
     IN p_vehicle_id INT,
     IN p_current_mileage INT
@@ -929,7 +930,7 @@ DELIMITER ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_book_trip_accommodation`(
+CREATE DEFINER=`Teo`@`localhost` PROCEDURE `sp_book_trip_accommodation`(
     IN p_trip_id INT
 )
 BEGIN
@@ -1039,7 +1040,7 @@ DELIMITER ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_branch_financials`(
+CREATE DEFINER=`Teo`@`localhost` PROCEDURE `sp_branch_financials`(
     IN p_br_code INT,
     OUT p_revenue DECIMAL(10,2),
     OUT p_expenses DECIMAL(10,2),
@@ -1094,7 +1095,7 @@ DELIMITER ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_generate_dummy_history`()
+CREATE DEFINER=`Teo`@`localhost` PROCEDURE `sp_generate_dummy_history`()
 BEGIN
     DECLARE i INT DEFAULT 0;
     DECLARE v_tr_id INT;
@@ -1156,7 +1157,7 @@ DELIMITER ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_history_destinations`(
+CREATE DEFINER=`Teo`@`localhost` PROCEDURE `sp_history_destinations`(
     IN p_dest_count INT
 )
 BEGIN
@@ -1179,7 +1180,7 @@ DELIMITER ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_history_revenue`(
+CREATE DEFINER=`Teo`@`localhost` PROCEDURE `sp_history_revenue`(
     IN p_start DATE,
     IN p_end DATE
 )
@@ -1203,7 +1204,7 @@ DELIMITER ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_search_accommodation`(
+CREATE DEFINER=`Teo`@`localhost` PROCEDURE `sp_search_accommodation`(
     IN p_dst_id INT,             -- Destination ID
     IN p_arrival DATE,           -- Arrival Date
     IN p_departure DATE,         -- Departure Date
