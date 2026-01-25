@@ -67,4 +67,32 @@ END$$
 
 DELIMITER ;
 
+DELIMITER $$
 
+DROP TRIGGER IF EXISTS trg_calculate_accommodation_cost$$
+
+CREATE TRIGGER trg_calculate_accommodation_cost
+    BEFORE INSERT ON room_usage
+    FOR EACH ROW
+BEGIN
+    DECLARE v_price_per_night DECIMAL(10,2);
+    DECLARE v_nights INT;
+
+    -- 1. Get price from lodging table
+    SELECT lg_cost_per_night INTO v_price_per_night
+    FROM lodging
+    WHERE lg_id = NEW.ru_lodging_id;
+
+    -- 2. Calculate nights
+    SET v_nights = DATEDIFF(NEW.ru_checkout, NEW.ru_checkin);
+
+    -- 3. Set the total cost (Price * Nights * Rooms)
+    SET NEW.ru_total_cost = v_price_per_night * v_nights * NEW.ru_rooms_count;
+END$$
+
+DELIMITER ;
+
+UPDATE room_usage ru
+    JOIN lodging l ON ru.ru_lodging_id = l.lg_id
+SET ru.ru_total_cost = l.lg_cost_per_night * DATEDIFF(ru.ru_checkout, ru.ru_checkin) * ru.ru_rooms_count
+WHERE ru.ru_total_cost = 0 OR ru.ru_total_cost IS NULL;

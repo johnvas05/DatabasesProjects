@@ -1,76 +1,129 @@
-USE baseisproject;
-
 DELIMITER $$
 
--- 1a. Log INSERT on 'trip'
-CREATE TRIGGER trg_log_trip_insert AFTER INSERT ON trip
-    FOR EACH ROW
+-- ==========================================
+-- LOG TRIGGERS FOR RESERVATION
+-- ==========================================
+CREATE TRIGGER trg_log_reservation_insert AFTER INSERT ON reservation FOR EACH ROW
 BEGIN
     INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
-    VALUES (USER(), 'trip', 'INSERT', CONCAT('New Trip ID: ', NEW.tr_id));
+    VALUES (USER(), 'reservation', 'INSERT', CONCAT('New Res TripID: ', NEW.res_tr_id, ' CustID: ', NEW.res_cust_id));
 END$$
 
--- 1b. Log UPDATE on 'trip'
-CREATE TRIGGER trg_log_trip_update AFTER UPDATE ON trip
-    FOR EACH ROW
+CREATE TRIGGER trg_log_reservation_update AFTER UPDATE ON reservation FOR EACH ROW
 BEGIN
     INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
-    VALUES (USER(), 'trip', 'UPDATE', CONCAT('Trip ID: ', OLD.tr_id, ' Status changed from ', OLD.tr_status, ' to ', NEW.tr_status));
+    VALUES (USER(), 'reservation', 'UPDATE', CONCAT('Res TripID: ', NEW.res_tr_id, ' Status: ', OLD.res_status, '->', NEW.res_status));
 END$$
 
--- 1c. Log DELETE on 'trip'
-CREATE TRIGGER trg_log_trip_delete AFTER DELETE ON trip
-    FOR EACH ROW
+CREATE TRIGGER trg_log_reservation_delete AFTER DELETE ON reservation FOR EACH ROW
 BEGIN
     INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
-    VALUES (USER(), 'trip', 'DELETE', CONCAT('Deleted Trip ID: ', OLD.tr_id));
+    VALUES (USER(), 'reservation', 'DELETE', CONCAT('Deleted Res TripID: ', OLD.res_tr_id));
 END$$
 
-DELIMITER ;
-
-DELIMITER $$
-
-CREATE TRIGGER trg_calculate_accommodation_cost
-    BEFORE INSERT ON room_usage
-    FOR EACH ROW
+-- ==========================================
+-- LOG TRIGGERS FOR CUSTOMER
+-- ==========================================
+CREATE TRIGGER trg_log_customer_insert AFTER INSERT ON customer FOR EACH ROW
 BEGIN
-    DECLARE v_price_per_night DECIMAL(10,2);
-    DECLARE v_nights INT;
-
-    -- 1. Find the price per night for this lodging
-    SELECT lg_cost_per_night INTO v_price_per_night
-    FROM lodging
-    WHERE lg_id = NEW.ru_lodging_id;
-
-    -- 2. Calculate number of nights
-    SET v_nights = DATEDIFF(NEW.ru_checkout, NEW.ru_checkin);
-
-    -- 3. Calculate Total Cost
-    -- Formula: Price * Nights * Rooms
-    SET NEW.ru_total_cost = v_price_per_night * v_nights * NEW.ru_rooms_count;
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'customer', 'INSERT', CONCAT('New Customer: ', NEW.cust_lname));
 END$$
 
-DELIMITER ;
-
-ALTER TABLE trip ADD COLUMN tr_km INT DEFAULT 0;
-
-DELIMITER $$
-
-CREATE TRIGGER trg_complete_trip_vehicle_update
-    AFTER UPDATE ON trip
-    FOR EACH ROW
+CREATE TRIGGER trg_log_customer_update AFTER UPDATE ON customer FOR EACH ROW
 BEGIN
-    -- Check if status changed to COMPLETED
-    IF NEW.tr_status = 'COMPLETED' AND OLD.tr_status != 'COMPLETED' THEN
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'customer', 'UPDATE', CONCAT('Customer ID: ', NEW.cust_id, ' Updated'));
+END$$
 
-        -- Update the vehicle used in this trip
-        UPDATE vehicle
-        SET
-            v_status = 'Available',                 -- Free up the vehicle
-            v_mileage = v_mileage + NEW.tr_km       -- Add trip distance to total mileage
-        WHERE v_id = NEW.tr_vehicle_id;
+CREATE TRIGGER trg_log_customer_delete AFTER DELETE ON customer FOR EACH ROW
+BEGIN
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'customer', 'DELETE', CONCAT('Deleted Customer ID: ', OLD.cust_id));
+END$$
 
-    END IF;
+-- ==========================================
+-- LOG TRIGGERS FOR DESTINATION
+-- ==========================================
+CREATE TRIGGER trg_log_destination_insert AFTER INSERT ON destination FOR EACH ROW
+BEGIN
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'destination', 'INSERT', CONCAT('New Dest: ', NEW.dst_name));
+END$$
+
+CREATE TRIGGER trg_log_destination_update AFTER UPDATE ON destination FOR EACH ROW
+BEGIN
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'destination', 'UPDATE', CONCAT('Dest ID: ', NEW.dst_id, ' Updated'));
+END$$
+
+CREATE TRIGGER trg_log_destination_delete AFTER DELETE ON destination FOR EACH ROW
+BEGIN
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'destination', 'DELETE', CONCAT('Deleted Dest: ', OLD.dst_name));
+END$$
+
+-- ==========================================
+-- LOG TRIGGERS FOR VEHICLE
+-- ==========================================
+CREATE TRIGGER trg_log_vehicle_insert AFTER INSERT ON vehicle FOR EACH ROW
+BEGIN
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'vehicle', 'INSERT', CONCAT('New Vehicle: ', NEW.v_license_plate));
+END$$
+
+CREATE TRIGGER trg_log_vehicle_update AFTER UPDATE ON vehicle FOR EACH ROW
+BEGIN
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'vehicle', 'UPDATE', CONCAT('Vehicle: ', NEW.v_license_plate, ' Status: ', NEW.v_status));
+END$$
+
+CREATE TRIGGER trg_log_vehicle_delete AFTER DELETE ON vehicle FOR EACH ROW
+BEGIN
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'vehicle', 'DELETE', CONCAT('Deleted Vehicle: ', OLD.v_license_plate));
+END$$
+
+-- ==========================================
+-- LOG TRIGGERS FOR LODGING
+-- ==========================================
+CREATE TRIGGER trg_log_lodging_insert AFTER INSERT ON lodging FOR EACH ROW
+BEGIN
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'lodging', 'INSERT', CONCAT('New Lodging: ', NEW.lg_name));
+END$$
+
+CREATE TRIGGER trg_log_lodging_update AFTER UPDATE ON lodging FOR EACH ROW
+BEGIN
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'lodging', 'UPDATE', CONCAT('Lodging: ', NEW.lg_name, ' Updated'));
+END$$
+
+CREATE TRIGGER trg_log_lodging_delete AFTER DELETE ON lodging FOR EACH ROW
+BEGIN
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'lodging', 'DELETE', CONCAT('Deleted Lodging: ', OLD.lg_name));
+END$$
+
+-- ==========================================
+-- LOG TRIGGERS FOR ROOM_USAGE
+-- ==========================================
+CREATE TRIGGER trg_log_room_usage_insert AFTER INSERT ON room_usage FOR EACH ROW
+BEGIN
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'room_usage', 'INSERT', CONCAT('Booked Trip: ', NEW.ru_trip_id, ' Hotel: ', NEW.ru_lodging_id));
+END$$
+
+CREATE TRIGGER trg_log_room_usage_update AFTER UPDATE ON room_usage FOR EACH ROW
+BEGIN
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'room_usage', 'UPDATE', CONCAT('Updated Booking Trip: ', NEW.ru_trip_id));
+END$$
+
+CREATE TRIGGER trg_log_room_usage_delete AFTER DELETE ON room_usage FOR EACH ROW
+BEGIN
+    INSERT INTO log_actions (log_dba_username, log_table_name, log_action_type, log_details)
+    VALUES (USER(), 'room_usage', 'DELETE', CONCAT('Deleted Booking Trip: ', OLD.ru_trip_id));
 END$$
 
 DELIMITER ;
