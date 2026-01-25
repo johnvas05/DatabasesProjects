@@ -1,9 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="SqlDialectMappings">
+    <file url="file://$PROJECT_DIR$/queries/Accommodation.sql" dialect="MySQL" />
+    <file url="file://$PROJECT_DIR$/queries/AccommodationProcedure.sql" dialect="MySQL" />
+    <file url="file://$PROJECT_DIR$/queries/AdminLog.sql" dialect="MySQL" />
+    <file url="file://$PROJECT_DIR$/queries/AutoBookProcedure.sql" dialect="MySQL" />
     <file url="file://$PROJECT_DIR$/queries/CHECKS.sql" dialect="MySQL" />
+    <file url="file://$PROJECT_DIR$/queries/Insertions.sql" dialect="MySQL" />
     <file url="file://$PROJECT_DIR$/queries/PROCEDURE.sql" dialect="MySQL" />
     <file url="file://$PROJECT_DIR$/queries/Query.sql" dialect="MySQL" />
     <file url="file://$PROJECT_DIR$/queries/TRIGGER.sql" dialect="MySQL" />
+    <file url="file://$PROJECT_DIR$/queries/Triggers.sql" dialect="MySQL" />
+    <file url="file://$PROJECT_DIR$/queries/VechicleProcedure.sql" dialect="MySQL" />
+    <file url="file://$PROJECT_DIR$/queries/cars.sql" dialect="MySQL" />
+    <file url="file://$PROJECT_DIR$/queries/history.sql" dialect="MySQL" />
   </component>
 </project>

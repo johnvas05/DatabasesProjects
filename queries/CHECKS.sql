@@ -1,70 +1,76 @@
 USE baseisproject;
 
-CALL sp_branch_financials(999, @rev, @exp, @profit);
-SELECT @rev, @exp, @profit;
+SET FOREIGN_KEY_CHECKS = 0;
 
-UPDATE worker
-SET wrk_salary = wrk_salary * 1.01
-WHERE wrk_AT = 'AT00000001';
+-- 1. Wipe Old Tables
+TRUNCATE TABLE reservation;
+TRUNCATE TABLE travel_to;
+TRUNCATE TABLE event;
+TRUNCATE TABLE trip;
+TRUNCATE TABLE languages;
+TRUNCATE TABLE phones;
+TRUNCATE TABLE manages;
+TRUNCATE TABLE admin;
+TRUNCATE TABLE driver;
+TRUNCATE TABLE guide;
+TRUNCATE TABLE worker;
+TRUNCATE TABLE branch;
+TRUNCATE TABLE destination;
+TRUNCATE TABLE customer;
 
-INSERT INTO reservation
-(res_tr_id, res_seatnum, res_cust_id, res_status, res_total_cost)
-VALUES
-    (1, 10, 1, 'PAID', 6000);
+-- 2. Wipe New Tables
+TRUNCATE TABLE room_usage;
+TRUNCATE TABLE trip_history;
+TRUNCATE TABLE vehicle;
+TRUNCATE TABLE lodging;
+TRUNCATE TABLE log_actions;
+TRUNCATE TABLE dba_users;
 
+SET FOREIGN_KEY_CHECKS = 1;
 
-UPDATE worker
-SET wrk_salary = wrk_salary * 1.02
-WHERE wrk_AT = 'AT00000010';
+-- A. Setup Basic Data
+INSERT INTO branch (br_code, br_street, br_num, br_city) VALUES (1, 'Main St', 10, 'Athens');
+INSERT INTO destination (dst_name, dst_rtype, dst_language_code, dst_location) VALUES ('Paris', 'ABROAD', 'EN', NULL);
 
-SELECT wrk_AT, wrk_salary
-FROM worker
-WHERE wrk_AT = 'AT00000010';
+-- B. Setup Worker & Driver (License D for Bus)
+INSERT INTO worker (wrk_AT, wrk_name, wrk_lname, wrk_salary, wrk_br_code) VALUES ('AT100', 'John', 'Doe', 1000, 1);
+INSERT INTO driver (drv_AT, drv_license, drv_route, drv_experience) VALUES ('AT100', 'D', 'ABROAD', 5);
 
-UPDATE worker
-SET wrk_salary = wrk_salary * 1.05
-WHERE wrk_AT = 'AT00000010';
+-- C. Setup New Resources (Vehicle & Hotel)
+INSERT INTO vehicle (v_br_code, v_license_plate, v_model, v_brand, v_type, v_seats, v_status, v_mileage)
+VALUES (1, 'ABC-1234', 'Sprinter', 'Mercedes', 'Bus', 50, 'Available', 10000);
 
-SELECT wrk_AT, wrk_salary, wrk_br_code
-FROM worker
-WHERE wrk_AT IN ('AT00000001', 'AT00000010');
+INSERT INTO lodging (lg_dst_id, lg_name, lg_type, lg_stars, lg_rating, lg_address, lg_city, lg_total_rooms, lg_cost_per_night)
+VALUES (1, 'Hotel Paris', 'Hotel', 4, 4.5, 'Champs Elysees', 'Paris', 20, 100.00);
 
-SELECT t.tr_br_code, SUM(r.res_total_cost) AS revenue
-FROM reservation r
-         JOIN trip t ON r.res_tr_id = t.tr_id
-GROUP BY t.tr_br_code;
+-- D. Create a Trip & Reservation
+-- Register the current system user as a DBA
+INSERT INTO dba_users (dba_username, dba_start_date)
+VALUES (USER(), CURDATE());
+INSERT INTO trip (tr_departure, tr_return, tr_maxseats, tr_cost_adult, tr_cost_child, tr_status, tr_br_code, tr_drv_AT)
+VALUES ('2026-06-01', '2026-06-10', 50, 500, 300, 'PLANNED', 1, 'AT100');
 
-SELECT wrk_br_code, SUM(wrk_salary) AS expenses
-FROM worker
-GROUP BY wrk_br_code;
+INSERT INTO travel_to (to_tr_id, to_dst_id, to_arrival, to_departure)
+VALUES (1, 1, '2026-06-01', '2026-06-05');
 
-CALL sp_branch_financials(999, @rev, @exp, @profit);
-SELECT @rev, @exp, @profit;
+INSERT INTO customer (cust_name, cust_lname) VALUES ('George', 'Papadopoulos');
+INSERT INTO reservation (res_tr_id, res_seatnum, res_cust_id, res_status) VALUES (1, 1, 1, 'CONFIRMED');
 
-DELETE FROM reservation
-WHERE res_tr_id = 1 AND res_total_cost = 6000;
+SELECT tr_id, tr_departure FROM trip;
 
+-- Link destination to Trip #2 (Replace 2 if your ID is different)
+INSERT INTO travel_to (to_tr_id, to_dst_id, to_arrival, to_departure)
+VALUES (2, 1, '2026-06-01', '2026-06-05');
 
-UPDATE worker
-SET wrk_salary = wrk_salary * 1.01
-WHERE wrk_AT = 'AT00000001';
+-- Add Customer
+INSERT INTO customer (cust_name, cust_lname) VALUES ('George', 'Papadopoulos');
 
-INSERT INTO reservation
-(res_tr_id, res_seatnum, res_cust_id, res_status, res_total_cost)
-VALUES
-    (1, 25, 1, 'PAID', 6000);
+-- Create Reservation for Trip #2
+-- Note: cust_id is likely 1, but if you had failures there too, check 'SELECT * FROM customer'
+INSERT INTO reservation (res_tr_id, res_seatnum, res_cust_id, res_status)
+VALUES (2, 1, 1, 'CONFIRMED');
 
-UPDATE worker
-SET wrk_salary = wrk_salary * 1.02
-WHERE wrk_AT = 'AT00000010';
+-- Assign vehicle 1 to trip 2
+CALL sp_assign_vehicle_to_trip(2, 1, 10050);
 
-SELECT wrk_AT, wrk_salary
-FROM worker
-WHERE wrk_AT = 'AT00000010';
-
-UPDATE worker
-SET wrk_salary = wrk_salary * 1.05
-WHERE wrk_AT = 'AT00000010';
-
-
-
+CALL sp_book_trip_accommodation(2);
