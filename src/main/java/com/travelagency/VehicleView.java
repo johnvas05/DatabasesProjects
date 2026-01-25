@@ -98,7 +98,13 @@ public class VehicleView {
                         cmbBranch.getValue().getId());
                 vehicleDAO.addVehicle(v);
                 refreshTable();
-                clearForm(txtPlate, txtModel, txtBrand, txtStatus, txtMileage);
+                // Clear form fields manually
+                txtPlate.clear();
+                txtModel.clear();
+                txtBrand.clear();
+                txtStatus.clear();
+                txtMileage.clear();
+                txtSeats.clear();
                 cmbType.getSelectionModel().clearSelection();
             } catch (SQLException ex) {
                 showAlert("Error", "Database Error: " + ex.getMessage());
@@ -138,19 +144,6 @@ public class VehicleView {
         } catch (SQLException e) {
             e.printStackTrace();
         }
-    }
-
-    private void clearForm(TextField... fields) {
-        for (TextField f : fields)
-            f.clear();
-    }
-
-    private void clearForm(TextField t1, TextField t2, TextField t3, TextField t4, ComboBox<String> c1) {
-        t1.clear();
-        t2.clear();
-        t3.clear();
-        t4.clear();
-        c1.getSelectionModel().clearSelection();
     }
 
     private void showAlert(String title, String message) {

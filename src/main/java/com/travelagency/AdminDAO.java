@@ -8,7 +8,7 @@ public class AdminDAO {
 
     public List<LogEntry> getAllLogs() throws SQLException {
         List<LogEntry> list = new ArrayList<>();
-        String query = "SELECT * FROM log ORDER BY log_timestamp DESC";
+        String query = "SELECT * FROM log_actions ORDER BY log_timestamp DESC LIMIT 100";
 
         try (Connection conn = DatabaseConnection.getConnection();
                 Statement stmt = conn.createStatement();
@@ -17,10 +17,10 @@ public class AdminDAO {
             while (rs.next()) {
                 list.add(new LogEntry(
                         rs.getInt("log_id"),
-                        rs.getString("log_username"),
+                        rs.getString("log_dba_username"),
                         rs.getTimestamp("log_timestamp"),
-                        rs.getString("log_action"),
-                        rs.getString("log_table")));
+                        rs.getString("log_action_type"),
+                        rs.getString("log_table_name")));
             }
         }
         return list;

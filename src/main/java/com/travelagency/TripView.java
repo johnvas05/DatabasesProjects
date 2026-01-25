@@ -368,11 +368,6 @@ public class TripView {
         }
     }
 
-    private void clearForm(TextField... fields) {
-        for (TextField f : fields)
-            f.clear();
-    }
-
     private void showAlert(String title, String message) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle(title);
