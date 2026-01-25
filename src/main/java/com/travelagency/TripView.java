@@ -184,7 +184,45 @@ public class TripView {
             }
         });
 
-        layout.getChildren().addAll(title, table, lblInfo, form, form2, btnDetails);
+        Button btnAutoBook = new Button("Auto-Book Accommodations 🏨");
+        btnAutoBook.setStyle("-fx-background-color: #90ee90; -fx-font-weight: bold;");
+        btnAutoBook.setOnAction(e -> {
+            Trip selected = table.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                // Confirm before booking
+                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+                confirm.setTitle("Auto-Book Accommodations");
+                confirm.setHeaderText("Book hotels for Trip #" + selected.getId() + "?");
+                confirm.setContentText("This will automatically book accommodations for ALL destinations.\n" +
+                        "Note: Any existing bookings for this trip will be removed first.");
+
+                confirm.showAndWait().ifPresent(response -> {
+                    if (response == ButtonType.OK) {
+                        try {
+                            // First, delete any existing accommodations for this trip
+                            try (Connection conn = DatabaseConnection.getConnection();
+                                    PreparedStatement pstmt = conn.prepareStatement(
+                                            "DELETE FROM room_usage WHERE ru_trip_id = ?")) {
+                                pstmt.setInt(1, selected.getId());
+                                pstmt.executeUpdate();
+                            }
+
+                            // Now call the stored procedure
+                            String result = dao.autoBookAccommodations(selected.getId());
+                            refreshTable();
+                            showAlert("Success - Stored Procedure Executed!", result);
+                        } catch (SQLException ex) {
+                            showAlert("Booking Failed", ex.getMessage());
+                        }
+                    }
+                });
+            } else {
+                showAlert("Warning", "Select a trip to book accommodations for.");
+            }
+        });
+
+        HBox buttonBox = new HBox(10, btnDetails, btnAutoBook);
+        layout.getChildren().addAll(title, table, lblInfo, form, form2, buttonBox);
         return layout;
     }
 

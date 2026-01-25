@@ -64,4 +64,53 @@ public class TripDAO {
     // If the requirement is to link a vehicle, we might need a separate table or
     // update `trip` to include `tr_veh_plate`.
     // For now, I'll stick to basic CRUD.
+
+    /**
+     * Calls stored procedure to automatically book accommodations for all trip
+     * destinations
+     * Requirement 3.2.3 (Bonus): Use stored procedure sp_book_trip_accommodation
+     * 
+     * @param tripId The trip to book accommodations for
+     * @return Success message or error details
+     * @throws SQLException if procedure fails or no rooms available
+     */
+    public String autoBookAccommodations(int tripId) throws SQLException {
+        String sql = "{CALL sp_book_trip_accommodation(?)}";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+                CallableStatement stmt = conn.prepareCall(sql)) {
+
+            stmt.setInt(1, tripId);
+
+            // Execute the procedure
+            stmt.execute();
+
+            // Count how many accommodations were booked
+            String countQuery = "SELECT COUNT(*) FROM room_usage WHERE ru_trip_id = ?";
+            try (PreparedStatement pstmt = conn.prepareStatement(countQuery)) {
+                pstmt.setInt(1, tripId);
+                ResultSet rs = pstmt.executeQuery();
+                if (rs.next()) {
+                    int count = rs.getInt(1);
+                    if (count > 0) {
+                        return "✅ Success!\n\n" +
+                                "Automatically booked " + count + " accommodation(s) for this trip.\n\n" +
+                                "View details in 'Show Trip Details' → Accommodations section.";
+                    } else {
+                        return "⚠️ No accommodations booked.\n\n" +
+                                "This trip may not have destinations in the travel_to table.";
+                    }
+                }
+            }
+
+            return "Stored procedure executed successfully!";
+
+        } catch (SQLException e) {
+            // Check if it's a stored procedure error (SIGNAL SQLSTATE '45000')
+            if (e.getSQLState() != null && e.getSQLState().equals("45000")) {
+                throw new SQLException("Booking Failed: " + e.getMessage());
+            }
+            throw e;
+        }
+    }
 }
