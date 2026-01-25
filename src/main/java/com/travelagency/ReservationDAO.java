@@ -36,18 +36,28 @@ public class ReservationDAO {
     }
 
     public void addReservation(Reservation res) throws SQLException {
-        String query = "INSERT INTO reservation (res_tr_id, res_seatnum, res_cust_id, res_status, res_total_cost) VALUES (?, ?, ?, ?, ?)";
+        // Insert reservation with 0 cost initially
+        String insertQuery = "INSERT INTO reservation (res_tr_id, res_seatnum, res_cust_id, res_status, res_total_cost) VALUES (?, ?, ?, ?, 0)";
 
         try (Connection conn = DatabaseConnection.getConnection();
-                PreparedStatement pstmt = conn.prepareStatement(query)) {
+                PreparedStatement pstmt = conn.prepareStatement(insertQuery)) {
 
             pstmt.setInt(1, res.getTr_id());
             pstmt.setInt(2, res.getSeatNum());
             pstmt.setInt(3, res.getCust_id());
             pstmt.setString(4, res.getStatus());
-            pstmt.setDouble(5, res.getTotalCost());
 
             pstmt.executeUpdate();
+
+            // Call stored procedure to calculate correct child/adult price
+            // Use composite key (trip_id, seat_num, cust_id)
+            String procedureCall = "{CALL sp_calculate_reservation_cost(?, ?, ?)}";
+            try (CallableStatement stmt = conn.prepareCall(procedureCall)) {
+                stmt.setInt(1, res.getTr_id());
+                stmt.setInt(2, res.getSeatNum());
+                stmt.setInt(3, res.getCust_id());
+                stmt.execute();
+            }
         }
     }
 
