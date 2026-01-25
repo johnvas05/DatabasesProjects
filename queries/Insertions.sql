@@ -280,3 +280,30 @@ WHERE cust_id <= 15;
 UPDATE customer
 SET cust_birth_date = DATE_ADD('2015-01-01', INTERVAL FLOOR(RAND() * 1800) DAY)
 WHERE cust_id > 15;
+
+
+INSERT INTO lodging (lg_dst_id, lg_name, lg_type, lg_stars, lg_rating, lg_status, lg_address, lg_city, lg_phone, lg_email, lg_total_rooms, lg_cost_per_night, lg_wifi, lg_restaurant_bar, lg_ac, lg_access_disability) VALUES
+                                                                                                                                                                                                                           (1, 'Le Grand Paris', 'Hotel', 5, 4.8, 'Active', '10 Rue de Rivoli', 'Paris', '3310000001', 'contact@grandparis.fr', 100, 250.00, 1, 1, 1, 1),
+                                                                                                                                                                                                                           (2, 'London Stay', 'Hostel', NULL, 3.5, 'Active', '22 Baker St', 'London', '4420000002', 'info@londonstay.uk', 30, 60.00, 1, 0, 0, 0),
+                                                                                                                                                                                                                           (3, 'Berlin Plaza', 'Hotel', 4, 4.2, 'Active', 'Alexanderplatz 1', 'Berlin', '4930000003', 'booking@berlinplaza.de', 80, 120.00, 1, 1, 1, 1),
+                                                                                                                                                                                                                           (4, 'Roma Bella', 'Apartment', NULL, 4.9, 'Active', 'Via Roma 10', 'Rome', '3906000004', 'hello@romabella.it', 5, 150.00, 1, 0, 1, 0),
+                                                                                                                                                                                                                           (5, 'Madrid Sol', 'Hotel', 3, 4.0, 'Active', 'Puerta del Sol', 'Madrid', '3491000005', 'reception@madridsol.es', 50, 90.00, 1, 0, 1, 1),
+                                                                                                                                                                                                                           (6, 'Nafplio Palace', 'Resort', 5, 4.7, 'Active', 'Acronafplia', 'Nafplio', '3027520006', 'reservations@nafplio.gr', 60, 200.00, 1, 1, 1, 1),
+                                                                                                                                                                                                                           (7, 'Meteora View', 'Room', NULL, 4.5, 'Active', 'Kalambaka Main Rd', 'Kalambaka', '3024320007', 'rooms@meteora.gr', 10, 50.00, 0, 0, 1, 0),
+                                                                                                                                                                                                                           (8, 'Delphi Omni', 'Hotel', 3, 3.8, 'Active', 'Apollonos St', 'Delphi', '3022650008', 'info@delphiomni.gr', 40, 80.00, 1, 1, 1, 0),
+                                                                                                                                                                                                                           (9, 'NYC Central', 'Hotel', 4, 4.3, 'Active', '5th Avenue', 'New York', '1212000009', 'stay@nyccentral.us', 200, 300.00, 1, 1, 1, 1),
+                                                                                                                                                                                                                           (10, 'Tokyo Capsule', 'Hostel', NULL, 4.1, 'Active', 'Shinjuku', 'Tokyo', '8130000010', 'sleep@tokyo.jp', 500, 40.00, 1, 0, 1, 1);
+CALL sp_book_trip_accommodation(1);
+CALL sp_book_trip_accommodation(2);
+CALL sp_book_trip_accommodation(3);
+CALL sp_book_trip_accommodation(4);
+CALL sp_book_trip_accommodation(5);
+CALL sp_book_trip_accommodation(6);
+CALL sp_book_trip_accommodation(7);
+CALL sp_book_trip_accommodation(8);
+CALL sp_book_trip_accommodation(9);
+CALL sp_book_trip_accommodation(10);
+CALL sp_book_trip_accommodation(11);
+CALL sp_book_trip_accommodation(12);
+CALL sp_book_trip_accommodation(13);
+CALL sp_book_trip_accommodation(14);
