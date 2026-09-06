@@ -3,6 +3,10 @@
 Everything below starts from the same state, so the numbers in this file are
 the numbers on the screen. Reset, then follow the steps in order.
 
+> Keep **`CHEATSHEET.md`** open beside this: it answers "show me X" for any
+> requirement, in SQL and in the GUI, including how to make each rule fail
+> on purpose.
+
 ---
 
 ## 0. Before you start
@@ -51,9 +55,9 @@ If you only get to show one thing, show this:
 docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/Tests.sql
 ```
 
-> 100 checks - schema, seed data, the business rules of section 2, every stored
+> 154 checks - schema, seed data, the business rules of section 2, every stored
 > procedure, every trigger, the indexes - and a table at the end:
-> `100 | 100 | 0 | ALL TESTS PASSED`.
+> `154 | 154 | 0 | ALL TESTS PASSED`.
 >
 > It runs in under a second **on the live database and changes nothing**: the
 > whole script is one transaction that is rolled back before the report is

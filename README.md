@@ -98,7 +98,10 @@ rehearsals. The script it runs is `queries/Reset.sql`, which also works on its o
 docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 baseisproject < queries/Reset.sql
 ```
 
-`DEMO.md` is a step-by-step walkthrough of the whole project for the presentation.
+`DEMO.md` is a step-by-step walkthrough of the whole project for the
+presentation. `CHEATSHEET.md` is the quick reference to keep open next to it:
+for every requirement, how to prove it in SQL **and** how to show it in the
+GUI, including how to make each rule fail on purpose.
 
 ---
 
@@ -110,7 +113,7 @@ docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 baseisproject < queries/
 docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/Tests.sql
 ```
 
-`queries/Tests.sql` runs 100 checks (schema, seed data, the business rules of
+`queries/Tests.sql` runs 154 checks (schema, seed data, the business rules of
 section 2, every stored procedure of 3.1.3, every trigger of 3.1.4, the indexes
 of 3.1.3.4) and prints a PASS/FAIL table, the failures on their own and a
 summary. It needs no shell and no Java, so it can also just be opened in a SQL
@@ -180,7 +183,7 @@ in the demo state.
 | `CalculateReservationCost.sql`, `PROCEDURE.sql`, `TRIGGER.sql` | reservation pricing, branch financials, salary guard (used by the GUI) |
 | `Upgrade_2026-09.sql` | one-off upgrade of the January dump: real stay dates and `to_sequence`, `ru_nights`, covering indexes, lodging seed with postal codes, reservation prices, minimum participants, driver route/licence consistency, events for every trip, DBA usernames, CHECK constraints (vehicle type by seats, stars only for hotels/resorts), city/country destinations |
 
-| `Tests.sql` | the database test suite as one SQL script: 100 checks with a PASS/FAIL report, run inside a transaction that is rolled back, so it changes nothing |
+| `Tests.sql` | the database test suite as one SQL script: 154 checks with a PASS/FAIL report, every procedure and trigger shown both accepting and refusing, run inside a transaction that is rolled back, so it changes nothing |
 | `Reset.sql` | puts the database back into the demo state: the seed data of `Insertions.sql` (with reproducible birth dates), reservation prices, empty `room_usage` and `log_actions`, ids restarting at 1, `trip_history` kept |
 
 `baseisproject_dump.sql` is the complete database (schema, data, routines, triggers) after all of the above.
