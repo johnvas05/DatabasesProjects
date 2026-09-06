@@ -16,7 +16,9 @@ CREATE TABLE lodging (
                          lg_email VARCHAR(100),                      -- Email [cite: 156]
                          lg_total_rooms INT NOT NULL,                -- Total rooms [cite: 160]
                          lg_cost_per_night DECIMAL(10,2) NOT NULL,   -- Price per room/night [cite: 161]
-                         FOREIGN KEY (lg_dst_id) REFERENCES destination(dst_id) ON DELETE CASCADE
+                         FOREIGN KEY (lg_dst_id) REFERENCES destination(dst_id) ON DELETE CASCADE,
+                         -- official stars exist only for hotels and resorts
+                         CONSTRAINT chk_lodging_stars_type CHECK (lg_type IN ('Hotel', 'Resort') OR lg_stars IS NULL)
 );
 
 -- 2b. Create a table for Amenities (Many-to-Many relationship implicitly or flags)

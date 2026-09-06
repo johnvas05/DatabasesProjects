@@ -1,39 +1,37 @@
 USE baseisproject;
+
+-- Branch financials (revenue from reservations, expenses = salaries, profit
+-- ratio). Used by trg_worker_salary_increase (TRIGGER.sql) and by the GUI.
+
 DELIMITER $$
 
+DROP PROCEDURE IF EXISTS sp_branch_financials$$
+
 CREATE PROCEDURE sp_branch_financials (
-    IN p_br_code INT,
-    OUT p_revenue DECIMAL(10,2),
-    OUT p_expenses DECIMAL(10,2),
+    IN  p_br_code      INT,
+    OUT p_revenue      DECIMAL(10,2),
+    OUT p_expenses     DECIMAL(10,2),
     OUT p_profit_ratio DECIMAL(10,4)
 )
 BEGIN
     DECLARE v_exists INT;
 
-    -- check if branch exists
-    SELECT COUNT(*) INTO v_exists
-    FROM branch
-    WHERE br_code = p_br_code;
+    SELECT COUNT(*) INTO v_exists FROM branch WHERE br_code = p_br_code;
 
     IF v_exists = 0 THEN
         SET p_revenue = NULL;
         SET p_expenses = NULL;
         SET p_profit_ratio = NULL;
     ELSE
-        -- revenues
-        SELECT IFNULL(SUM(r.res_total_cost), 0)
-        INTO p_revenue
+        SELECT IFNULL(SUM(r.res_total_cost), 0) INTO p_revenue
         FROM reservation r
-                 JOIN trip t ON r.res_tr_id = t.tr_id
+        JOIN trip t ON r.res_tr_id = t.tr_id
         WHERE t.tr_br_code = p_br_code;
 
-        -- expenses
-        SELECT IFNULL(SUM(w.wrk_salary), 0)
-        INTO p_expenses
+        SELECT IFNULL(SUM(w.wrk_salary), 0) INTO p_expenses
         FROM worker w
         WHERE w.wrk_br_code = p_br_code;
 
-        -- profit ratio
         IF p_expenses = 0 THEN
             SET p_profit_ratio = NULL;
         ELSE

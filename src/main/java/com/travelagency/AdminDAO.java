@@ -8,7 +8,10 @@ public class AdminDAO {
 
     public List<LogEntry> getAllLogs() throws SQLException {
         List<LogEntry> list = new ArrayList<>();
-        String query = "SELECT * FROM log_actions ORDER BY log_timestamp DESC LIMIT 100";
+        // log_timestamp has a resolution of one second, so several actions of the
+        // same second would come back in an arbitrary order; log_id breaks the tie
+        // and keeps the newest action on top.
+        String query = "SELECT * FROM log_actions ORDER BY log_timestamp DESC, log_id DESC LIMIT 100";
 
         try (Connection conn = DatabaseConnection.getConnection();
                 Statement stmt = conn.createStatement();

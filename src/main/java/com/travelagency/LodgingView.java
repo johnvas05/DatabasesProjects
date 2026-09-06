@@ -3,6 +3,7 @@ package com.travelagency;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
@@ -29,73 +30,106 @@ public class LodgingView {
         // Table Columns
         TableColumn<Lodging, String> nameCol = new TableColumn<>("Name");
         nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
-
         TableColumn<Lodging, String> typeCol = new TableColumn<>("Type");
         typeCol.setCellValueFactory(new PropertyValueFactory<>("type"));
-
         TableColumn<Lodging, Integer> starsCol = new TableColumn<>("Stars");
         starsCol.setCellValueFactory(new PropertyValueFactory<>("stars"));
-
+        TableColumn<Lodging, String> cityCol = new TableColumn<>("City");
+        cityCol.setCellValueFactory(new PropertyValueFactory<>("city"));
+        TableColumn<Lodging, Integer> roomsCol = new TableColumn<>("Rooms");
+        roomsCol.setCellValueFactory(new PropertyValueFactory<>("totalRooms"));
         TableColumn<Lodging, Double> costCol = new TableColumn<>("Cost/Night");
         costCol.setCellValueFactory(new PropertyValueFactory<>("pricePerNight"));
+        TableColumn<Lodging, String> statusCol = new TableColumn<>("Status");
+        statusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
 
-        table.getColumns().addAll(nameCol, typeCol, starsCol, costCol);
+        table.getColumns().addAll(nameCol, typeCol, starsCol, cityCol, roomsCol, costCol, statusCol);
         refreshTable();
 
-        // Form
+        // Form (3.2.2): destination, type, stars and status from lists; numeric-only rooms and price
         ComboBox<Destination> cmbDest = new ComboBox<>();
-        cmbDest.setPromptText("Select Destination");
+        cmbDest.setPromptText("City destination");
         try {
-            DestinationDAO dDao = new DestinationDAO();
-            cmbDest.getItems().addAll(dDao.getAllDestinations());
+            // lodging belongs to city destinations only (3.1.2.2)
+            cmbDest.getItems().addAll(new DestinationDAO().getCityDestinations());
         } catch (SQLException e) {
             e.printStackTrace();
         }
 
         TextField txtName = new TextField();
         txtName.setPromptText("Name");
-        TextField txtAddress = new TextField();
-        txtAddress.setPromptText("Address");
         ComboBox<String> cmbType = new ComboBox<>();
-        cmbType.getItems().addAll("Hotel", "Hostel", "Apartment", "Resort", "Room");
+        cmbType.getItems().addAll("Hotel", "Hostel", "Resort", "Apartment", "Room");
         cmbType.setPromptText("Type");
-        TextField txtStars = new TextField();
-        txtStars.setPromptText("Stars (1-5)");
+
+        ComboBox<Integer> cmbStars = new ComboBox<>();
+        cmbStars.getItems().addAll(1, 2, 3, 4, 5);
+        cmbStars.setPromptText("Stars");
+        cmbStars.setDisable(true); // only hotels and resorts have official stars
+        cmbType.setOnAction(e -> {
+            boolean starred = "Hotel".equals(cmbType.getValue()) || "Resort".equals(cmbType.getValue());
+            cmbStars.setDisable(!starred);
+            if (!starred) {
+                cmbStars.getSelectionModel().clearSelection();
+            }
+        });
+
+        ComboBox<String> cmbStatus = new ComboBox<>();
+        cmbStatus.getItems().addAll("Active", "Inactive");
+        cmbStatus.setValue("Active");
+
+        TextField txtAddress = new TextField();
+        txtAddress.setPromptText("Street and number");
+        TextField txtCity = new TextField();
+        txtCity.setPromptText("City");
+        TextField txtPostal = new TextField();
+        txtPostal.setPromptText("Postal code");
+        TextField txtPhone = new TextField();
+        txtPhone.setPromptText("Phone");
+        TextField txtEmail = new TextField();
+        txtEmail.setPromptText("Email");
+        TextField txtRooms = new TextField();
+        txtRooms.setPromptText("Total rooms");
+        txtRooms.setTextFormatter(new TextFormatter<>(c -> c.getControlNewText().matches("\\d*") ? c : null));
         TextField txtCost = new TextField();
-        txtCost.setPromptText("Price/Night");
+        txtCost.setPromptText("Price/night");
+        txtCost.setTextFormatter(new TextFormatter<>(c -> c.getControlNewText().matches("\\d*(\\.\\d*)?") ? c : null));
 
         Button btnAdd = new Button("Add Lodging");
         btnAdd.setOnAction(e -> {
             if (cmbType.getValue() == null || cmbDest.getValue() == null) {
-                showAlert("Validation Error", "Select Type and Destination.");
+                showAlert("Validation Error", "Select the type and the destination.");
+                return;
+            }
+            if (txtName.getText().isBlank() || txtAddress.getText().isBlank() || txtCity.getText().isBlank()) {
+                showAlert("Validation Error", "Name, address and city are required.");
                 return;
             }
             try {
                 Lodging l = new Lodging(
                         cmbDest.getValue().getId(),
-                        txtName.getText(),
+                        txtName.getText().trim(),
                         cmbType.getValue(),
-                        Integer.parseInt(txtStars.getText()),
-                        0.0, // Default rating
-                        "Active", // Default status
-                        txtAddress.getText(),
-                        "Pending City", // Default City
-                        "00000", // Default Zip
-                        "", // Phone
-                        "", // Email
-                        10, // Default rooms
+                        cmbStars.getValue() == null ? 0 : cmbStars.getValue(),
+                        0.0, // rating: from customer reviews, starts at 0
+                        cmbStatus.getValue(),
+                        txtAddress.getText().trim(),
+                        txtCity.getText().trim(),
+                        txtPostal.getText().trim(),
+                        txtPhone.getText().trim(),
+                        txtEmail.getText().trim(),
+                        Integer.parseInt(txtRooms.getText()),
                         Double.parseDouble(txtCost.getText()));
                 lodgingDAO.addLodging(l);
                 refreshTable();
-                clearForm(txtName, txtAddress, txtStars, txtCost);
+                clearForm(txtName, txtAddress, txtCity, txtPostal, txtPhone, txtEmail, txtRooms, txtCost);
                 cmbType.getSelectionModel().clearSelection();
+                cmbStars.getSelectionModel().clearSelection();
                 cmbDest.getSelectionModel().clearSelection();
             } catch (SQLException ex) {
                 showAlert("Error", "Database Error: " + ex.getMessage());
             } catch (NumberFormatException ex) {
-                showAlert("Error", "Stars/Cost must be numbers.");
-            } catch (Exception ex) {
-                showAlert("Error", "Invalid Input: " + ex.getMessage());
+                showAlert("Error", "Total rooms and price per night are required numbers.");
             }
         });
 
@@ -115,9 +149,24 @@ public class LodgingView {
             }
         });
 
-        HBox form = new HBox(10, cmbDest, txtName, cmbType, txtAddress, txtStars, txtCost, btnAdd);
+        FlowPane form = Forms.row(
+                Forms.field("Destination * (cities only)", cmbDest, 190),
+                Forms.field("Name *", txtName, 170),
+                Forms.field("Type *", cmbType, 130),
+                Forms.field("Stars (hotels and resorts only)", cmbStars, 190),
+                Forms.field("Status", cmbStatus, 120),
+                Forms.field("Total rooms *", txtRooms, 110),
+                Forms.field("Price/night €", txtCost, 110));
+        FlowPane form2 = Forms.row(
+                Forms.field("Street and number *", txtAddress, 180),
+                Forms.field("City *", txtCity, 140),
+                Forms.field("Postal code", txtPostal, 110),
+                Forms.field("Phone", txtPhone, 140),
+                Forms.field("Email", txtEmail, 180),
+                Forms.action(btnAdd),
+                Forms.action(btnDelete));
 
-        layout.getChildren().addAll(title, table, form, btnDelete);
+        layout.getChildren().addAll(title, table, form, form2);
         return layout;
     }
 

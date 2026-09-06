@@ -1,111 +1,112 @@
-use `baseis project`;
+USE baseisproject;
+
+-- =====================================================================
+-- 3.1.3.3  Book accommodation for every destination of a trip
+-- Argument: trip id.
+-- For each destination (in visit order) the first lodging returned by
+-- sp_search_accommodation (3.1.3.2) is booked. The nights and cost of each
+-- booking are filled in by trg_calculate_accommodation_cost (3.1.4.2).
+-- Rooms needed = CEIL(confirmed/paid reservations / 2)  (double rooms).
+-- If any destination cannot be booked, every booking made for the trip is
+-- deleted and an error explains which destination/period failed.
+-- Existing bookings of the trip are replaced.
+-- =====================================================================
 
 DELIMITER $$
+
+DROP PROCEDURE IF EXISTS sp_book_trip_accommodation$$
 
 CREATE PROCEDURE sp_book_trip_accommodation(
     IN p_trip_id INT
 )
 BEGIN
-    -- Variables for cursor loop
     DECLARE done INT DEFAULT FALSE;
-    DECLARE v_dst_id INT;
-    DECLARE v_arrival DATETIME;
-    DECLARE v_departure DATETIME;
-
-    -- Variables for booking logic
-    DECLARE v_lodging_id INT;
-    DECLARE v_rooms_needed INT;
+    DECLARE v_dst_id            INT;
+    DECLARE v_dst_name          VARCHAR(100);
+    DECLARE v_arrival           DATETIME;
+    DECLARE v_departure         DATETIME;
+    DECLARE v_lodging_id        INT;
+    DECLARE v_rooms_needed      INT;
     DECLARE v_reservation_count INT;
+    DECLARE v_trip_exists       INT DEFAULT 0;
+    DECLARE v_msg               VARCHAR(255);
 
-    -- Cursor: Get all destinations for this trip in chronological order
     DECLARE cur_destinations CURSOR FOR
-        SELECT to_dst_id, to_arrival, to_departure
-        FROM travel_to
-        WHERE to_tr_id = p_trip_id
-        ORDER BY to_arrival ASC;
+        SELECT tt.to_dst_id, d.dst_name, tt.to_arrival, tt.to_departure
+        FROM travel_to tt
+        JOIN destination d ON d.dst_id = tt.to_dst_id
+        WHERE tt.to_tr_id = p_trip_id
+        ORDER BY tt.to_sequence ASC, tt.to_arrival ASC;
 
-    -- Handler to stop the loop
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
 
-    -- 1. Calculate Rooms Needed
-    -- Count confirmed reservations for this trip
+    SELECT COUNT(*) INTO v_trip_exists FROM trip WHERE tr_id = p_trip_id;
+    IF v_trip_exists = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Error: trip does not exist.';
+    END IF;
+
+    -- 1. Rooms needed (2 persons per room)
     SELECT COUNT(*) INTO v_reservation_count
     FROM reservation
     WHERE res_tr_id = p_trip_id AND res_status IN ('CONFIRMED', 'PAID');
 
-    -- Assumption: 2 people per room (Standard travel agency logic)
     SET v_rooms_needed = CEIL(v_reservation_count / 2);
 
-    -- Safety Check: If nobody is booked, stop.
     IF v_rooms_needed = 0 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Error: No confirmed reservations found for this trip.';
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Error: no confirmed or paid reservations for this trip, nothing to book.';
     END IF;
 
-    -- Start Transaction (All or Nothing)
-    START TRANSACTION;
+    -- 2. Replace any previous bookings of this trip
+    DELETE FROM room_usage WHERE ru_trip_id = p_trip_id;
 
     OPEN cur_destinations;
 
     read_loop: LOOP
-        FETCH cur_destinations INTO v_dst_id, v_arrival, v_departure;
+        FETCH cur_destinations INTO v_dst_id, v_dst_name, v_arrival, v_departure;
         IF done THEN
             LEAVE read_loop;
         END IF;
 
-        -- 2. Find best accommodation
-        -- Calls the Search Procedure we made in Step 3.1.3.2
-        -- v_lodging_id will store the result
+        -- 3. Best available lodging for this leg
         CALL sp_search_accommodation(v_dst_id, DATE(v_arrival), DATE(v_departure), v_rooms_needed, v_lodging_id);
 
-        -- 3. Check for Failure
         IF v_lodging_id IS NULL THEN
-            -- FAILURE: No room found for this specific leg of the trip.
-            -- Rollback: Delete any bookings already made for this trip ID
+            -- roll back everything booked so far for this trip
             DELETE FROM room_usage WHERE ru_trip_id = p_trip_id;
-
             CLOSE cur_destinations;
-            COMMIT; -- Commit the deletion so the clean-up is saved
-
-            SIGNAL SQLSTATE '45000'
-                SET MESSAGE_TEXT = 'Error: Could not find accommodation for a destination. All bookings cancelled.';
+            SET v_msg = LEFT(CONCAT('Error: no lodging in ', v_dst_name, ' with ', v_rooms_needed,
+                                    ' free room(s) for ', DATE(v_arrival), ' to ', DATE(v_departure),
+                                    '. All bookings of the trip were cancelled.'), 128);
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_msg;
         END IF;
 
-        -- 4. Make the Reservation
-        -- We insert with 0 cost. The TRIGGER (3.1.4.2) will calculate the cost automatically.
-        INSERT INTO room_usage (ru_trip_id, ru_lodging_id, ru_checkin, ru_checkout, ru_rooms_count, ru_total_cost)
-        VALUES (p_trip_id, v_lodging_id, DATE(v_arrival), DATE(v_departure), v_rooms_needed, 0);
-
+        -- 4. Book it (nights and cost are computed by the trigger)
+        INSERT INTO room_usage (ru_trip_id, ru_lodging_id, ru_checkin, ru_checkout, ru_rooms_count)
+        VALUES (p_trip_id, v_lodging_id, DATE(v_arrival), DATE(v_departure), v_rooms_needed);
     END LOOP;
 
     CLOSE cur_destinations;
-    COMMIT; -- Save changes
 
-    -- 5. Final Output (Success Summary)
+    -- 5. One line per booked lodging
     SELECT
-        l.lg_name AS Accommodation,
-        ru.ru_checkin AS CheckIn,
-        ru.ru_checkout AS CheckOut,
-        ru.ru_rooms_count AS Rooms,
-        ru.ru_total_cost AS Cost
+        l.lg_name          AS Accommodation,
+        d.dst_name         AS Destination,
+        ru.ru_checkin      AS CheckIn,
+        ru.ru_checkout     AS CheckOut,
+        ru.ru_nights       AS Nights,
+        ru.ru_rooms_count  AS Rooms,
+        ru.ru_total_cost   AS Cost
     FROM room_usage ru
-             JOIN lodging l ON ru.ru_lodging_id = l.lg_id
-    WHERE ru.ru_trip_id = p_trip_id;
+    JOIN lodging l     ON l.lg_id = ru.ru_lodging_id
+    JOIN destination d ON d.dst_id = l.lg_dst_id
+    WHERE ru.ru_trip_id = p_trip_id
+    ORDER BY ru.ru_checkin;
 
-    -- Show Grand Total
-    SELECT SUM(ru_total_cost) AS 'Total Trip Accommodation Cost'
+    -- 6. Total accommodation cost of the trip
+    SELECT SUM(ru_total_cost) AS TotalTripAccommodationCost
     FROM room_usage
     WHERE ru_trip_id = p_trip_id;
-
 END$$
 
 DELIMITER ;
-
-UPDATE reservation r
-    JOIN trip t ON r.res_tr_id = t.tr_id
-    JOIN customer c ON r.res_cust_id = c.cust_id
-SET r.res_total_cost = CASE
-    -- If customer is > 18 years old, charge Adult price
-                           WHEN DATEDIFF(CURDATE(), c.cust_birth_date) / 365.25 > 18 THEN t.tr_cost_adult
-    -- Otherwise, charge Child price
-                           ELSE t.tr_cost_child
-    END;

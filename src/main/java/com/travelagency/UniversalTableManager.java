@@ -37,7 +37,9 @@ public class UniversalTableManager {
         List<ColumnInfo> columns = new ArrayList<>();
         try (Connection conn = DatabaseConnection.getConnection()) {
             DatabaseMetaData metaData = conn.getMetaData();
-            ResultSet rs = metaData.getColumns(null, null, tableName, "%");
+            // limit to the current database: another database on the same server
+            // may hold a table of the same name, which would duplicate the columns
+            ResultSet rs = metaData.getColumns(conn.getCatalog(), null, tableName, "%");
 
             while (rs.next()) {
                 ColumnInfo col = new ColumnInfo();
@@ -59,11 +61,15 @@ public class UniversalTableManager {
         List<String> pkColumns = new ArrayList<>();
         try (Connection conn = DatabaseConnection.getConnection()) {
             DatabaseMetaData metaData = conn.getMetaData();
-            ResultSet rs = metaData.getPrimaryKeys(null, null, tableName);
+            // the current database only, and in the order of the key (KEY_SEQ),
+            // so a composite key is used exactly as it was declared
+            ResultSet rs = metaData.getPrimaryKeys(conn.getCatalog(), null, tableName);
 
+            SortedMap<Short, String> byPosition = new TreeMap<>();
             while (rs.next()) {
-                pkColumns.add(rs.getString("COLUMN_NAME"));
+                byPosition.put(rs.getShort("KEY_SEQ"), rs.getString("COLUMN_NAME"));
             }
+            pkColumns.addAll(byPosition.values());
         }
         return pkColumns;
     }
@@ -183,6 +189,84 @@ public class UniversalTableManager {
             }
             pstmt.executeUpdate();
         }
+    }
+
+    /**
+     * Foreign keys of a table: column name -> {referenced table, referenced column}.
+     * Used by the GUI to offer a list of existing rows instead of free text (3.2.2).
+     */
+    public static Map<String, String[]> getForeignKeys(String tableName) throws SQLException {
+        Map<String, String[]> fks = new LinkedHashMap<>();
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            DatabaseMetaData metaData = conn.getMetaData();
+            try (ResultSet rs = metaData.getImportedKeys(conn.getCatalog(), null, tableName)) {
+                while (rs.next()) {
+                    fks.put(rs.getString("FKCOLUMN_NAME"),
+                            new String[] { rs.getString("PKTABLE_NAME"), rs.getString("PKCOLUMN_NAME") });
+                }
+            }
+        }
+        return fks;
+    }
+
+    /**
+     * Full SQL type of every column (e.g. "enum('A','B')", "tinyint(1)", "date"),
+     * so the GUI can build the right editor for each column.
+     */
+    public static Map<String, String> getColumnSqlTypes(String tableName) throws SQLException {
+        Map<String, String> types = new LinkedHashMap<>();
+        try (Connection conn = DatabaseConnection.getConnection();
+                Statement stmt = conn.createStatement();
+                ResultSet rs = stmt.executeQuery("SHOW COLUMNS FROM `" + tableName + "`")) {
+            while (rs.next()) {
+                types.put(rs.getString("Field"), rs.getString("Type"));
+            }
+        }
+        return types;
+    }
+
+    /**
+     * Rows of a referenced table as "key | description" strings (key first, then
+     * the first text columns of the row) for foreign-key drop-downs.
+     */
+    public static List<String> getReferenceOptions(String refTable, String refColumn) throws SQLException {
+        List<String> options = new ArrayList<>();
+        List<String> textCols = new ArrayList<>();
+        for (ColumnInfo c : getTableColumns(refTable)) {
+            if (!c.name.equals(refColumn) && (c.type == Types.VARCHAR || c.type == Types.CHAR)
+                    && textCols.size() < 2) {
+                textCols.add(c.name);
+            }
+        }
+        StringBuilder sql = new StringBuilder("SELECT `" + refColumn + "`");
+        for (String c : textCols) {
+            sql.append(", `").append(c).append("`");
+        }
+        sql.append(" FROM `").append(refTable).append("` ORDER BY 1 LIMIT 1000");
+        try (Connection conn = DatabaseConnection.getConnection();
+                Statement stmt = conn.createStatement();
+                ResultSet rs = stmt.executeQuery(sql.toString())) {
+            while (rs.next()) {
+                StringBuilder label = new StringBuilder(rs.getString(1));
+                for (int i = 0; i < textCols.size(); i++) {
+                    String v = rs.getString(i + 2);
+                    if (v != null && !v.isBlank()) {
+                        label.append(i == 0 ? " | " : " ").append(v);
+                    }
+                }
+                options.add(label.toString());
+            }
+        }
+        return options;
+    }
+
+    /** The key part of a "key | description" option. */
+    public static String optionKey(String option) {
+        if (option == null) {
+            return null;
+        }
+        int i = option.indexOf(" | ");
+        return i < 0 ? option : option.substring(0, i);
     }
 
     /**

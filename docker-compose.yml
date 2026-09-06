@@ -1,0 +1,21 @@
+services:
+  db:
+    image: mariadb:11
+    container_name: baseis-mariadb
+    ports:
+      - "3307:3306"           # matches DatabaseConnection.java (localhost:3307)
+    environment:
+      MARIADB_ROOT_PASSWORD: john2005
+    volumes:
+      - baseis-data:/var/lib/mysql
+      # Database dump, mounted read-only; docker/init-db.sh loads it on first start
+      - ./baseisproject_dump.sql:/dump/baseisproject.sql:ro
+      - ./docker/init-db.sh:/docker-entrypoint-initdb.d/10-init-db.sh:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  baseis-data:

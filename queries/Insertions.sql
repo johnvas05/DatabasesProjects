@@ -1,61 +1,14 @@
 USE baseisproject;
 
-DELIMITER $$
-
-CREATE PROCEDURE sp_generate_dummy_history()
-BEGIN
-    DECLARE i INT DEFAULT 0;
-    DECLARE v_tr_id INT;
-
-    -- temporarily disable safety checks to speed up the massive insertion
-    SET FOREIGN_KEY_CHECKS = 0;
-    SET UNIQUE_CHECKS = 0;
-    SET SQL_LOG_BIN = 0;
-
-    -- Loop 90,000 times
-    WHILE i < 90000 DO
-            -- A. Create a Dummy Trip
-            INSERT INTO trip (tr_departure, tr_return, tr_maxseats, tr_cost_adult, tr_cost_child, tr_status, tr_br_code)
-            VALUES (
-                       DATE_ADD('2020-01-01', INTERVAL FLOOR(RAND() * 1500) DAY), -- Random Departure
-                       DATE_ADD('2020-01-01', INTERVAL FLOOR(RAND() * 1500) + 7 DAY), -- Random Return
-                       50,
-                       FLOOR(100 + RAND() * 400), -- Random Adult Cost (100-500)
-                       FLOOR(50 + RAND() * 200),  -- Random Child Cost (50-250)
-                       'COMPLETED',
-                       1 -- Branch Code (Using 1 for simplicity)
-                   );
-
-            SET v_tr_id = LAST_INSERT_ID();
-
-            -- B. Create the History Record for that trip
-            INSERT INTO trip_history (th_trip_id, th_departure, th_return, th_dest_count, th_participants, th_revenue)
-            VALUES (
-                       v_tr_id,
-                       (SELECT tr_departure FROM trip WHERE tr_id = v_tr_id),
-                       (SELECT tr_return FROM trip WHERE tr_id = v_tr_id),
-                       FLOOR(1 + RAND() * 5),       -- Random destinations (1-5)
-                       FLOOR(10 + RAND() * 40),     -- Random participants (10-50)
-                       FLOOR(1000 + RAND() * 10000) -- Random Revenue (1000-11000)
-                   );
-
-            SET i = i + 1;
-        END WHILE;
-
-    -- Re-enable safety checks
-    SET FOREIGN_KEY_CHECKS = 1;
-    SET UNIQUE_CHECKS = 1;
-    SET SQL_LOG_BIN = 1;
-
-    SELECT 'Success: 90,000 records generated.' AS msg;
-END$$
-
-DELIMITER ;
-
-CALL sp_generate_dummy_history();
+-- Seed data for the extended database (2-person team: 2 x the per-person minimum
+-- of the preparatory phase). Run after the tables exist (Query.sql, cars.sql,
+-- Accommodation.sql, history.sql, AdminLog.sql). The 90 000 trip_history rows
+-- are generated at the end by sp_generate_dummy_history (defined in history.sql).
 
 -- 1. Register yourself as DBA (Crucial for triggers!)
-INSERT IGNORE INTO dba_users (dba_username, dba_start_date) VALUES (USER(), CURDATE());
+INSERT IGNORE INTO dba_users (dba_username, dba_start_date) VALUES
+    (SUBSTRING_INDEX(USER(), '@', 1), CURDATE()),   -- the account running this script
+    ('Teo', '2025-11-01');
 
 -- 2. Clean Slate (Empty tables to avoid duplicate ID errors)
 SET FOREIGN_KEY_CHECKS = 0;
@@ -111,6 +64,10 @@ INSERT INTO destination (dst_name, dst_descr, dst_rtype, dst_language_code, dst_
                                                                                               ('Delphi', 'Central Greece', 'LOCAL', 'GR', NULL),
                                                                                               ('New York', 'USA', 'ABROAD', 'EN', NULL),
                                                                                               ('Tokyo', 'Japan', 'ABROAD', 'EN', NULL);
+-- a country destination: Paris belongs to France (dst_location)
+INSERT INTO destination (dst_name, dst_descr, dst_rtype, dst_language_code, dst_location) VALUES ('France', 'Country', 'ABROAD', 'FR', NULL);
+UPDATE destination SET dst_location = LAST_INSERT_ID() WHERE dst_name = 'Paris';
+
 
 -- 1. Insert 26 Base Workers (AT101 to AT126)
 -- Admins (10)
@@ -168,7 +125,7 @@ UPDATE branch SET br_manager_AT = 'AT106' WHERE br_code = 6;
 
 -- Drivers (8)
 INSERT INTO driver (drv_AT, drv_license, drv_route, drv_experience) VALUES
-                                                                        ('AT111', 'D', 'ABROAD', 10), ('AT112', 'C', 'LOCAL', 5),
+                                                                        ('AT111', 'D', 'ABROAD', 10), ('AT112', 'C', 'ABROAD', 5),
                                                                         ('AT113', 'D', 'ABROAD', 12), ('AT114', 'B', 'LOCAL', 3),
                                                                         ('AT115', 'D', 'ABROAD', 8), ('AT116', 'C', 'LOCAL', 4),
                                                                         ('AT117', 'D', 'ABROAD', 15), ('AT118', 'B', 'LOCAL', 2);
@@ -212,24 +169,38 @@ INSERT INTO trip (tr_departure, tr_return, tr_maxseats, tr_cost_adult, tr_cost_c
                                                                                                                                                       ('2026-06-01', '2026-06-10', 50, 500, 300, 'PLANNED', 1, 'AT119', 'AT111', 1),
                                                                                                                                                       ('2026-06-05', '2026-06-12', 20, 400, 200, 'CONFIRMED', 1, 'AT120', 'AT112', 2),
                                                                                                                                                       ('2026-06-10', '2026-06-15', 50, 600, 350, 'COMPLETED', 2, 'AT121', 'AT113', 4),
-                                                                                                                                                      ('2026-07-01', '2026-07-05', 9, 300, 150, 'PLANNED', 2, 'AT122', 'AT114', 3),
+                                                                                                                                                      ('2026-07-01', '2026-07-05', 9, 300, 150, 'PLANNED', 2, 'AT122', 'AT117', 3),
                                                                                                                                                       ('2026-07-05', '2026-07-10', 60, 550, 275, 'PLANNED', 3, 'AT123', 'AT115', 6),
-                                                                                                                                                      ('2026-07-15', '2026-07-20', 8, 250, 125, 'COMPLETED', 3, 'AT124', 'AT115', 5),
+                                                                                                                                                      ('2026-07-15', '2026-07-20', 8, 250, 125, 'COMPLETED', 3, 'AT124', 'AT116', 5),
                                                                                                                                                       ('2026-08-01', '2026-08-08', 18, 450, 225, 'PLANNED', 4, 'AT125', 'AT116', 7),
-                                                                                                                                                      ('2026-08-10', '2026-08-15', 9, 350, 175, 'CONFIRMED', 5, 'AT126', 'AT117', 8),
-                                                                                                                                                      ('2026-09-01', '2026-09-10', 52, 700, 350, 'PLANNED', 6, 'AT119', 'AT118', 9),
+                                                                                                                                                      ('2026-08-10', '2026-08-15', 9, 350, 175, 'CONFIRMED', 5, 'AT126', 'AT114', 8),
+                                                                                                                                                      ('2026-09-01', '2026-09-10', 52, 700, 350, 'PLANNED', 6, 'AT119', 'AT111', 9),
                                                                                                                                                       ('2026-09-15', '2026-09-20', 5, 200, 100, 'COMPLETED', 1, 'AT120', 'AT111', 10),
                                                                                                                                                       ('2026-10-01', '2026-10-10', 50, 500, 250, 'PLANNED', 1, 'AT121', 'AT112', 1),
                                                                                                                                                       ('2026-11-01', '2026-11-05', 20, 300, 150, 'PLANNED', 2, 'AT122', 'AT113', 2),
                                                                                                                                                       ('2026-12-20', '2026-12-27', 50, 800, 400, 'PLANNED', 3, 'AT123', 'AT115', 6),
-                                                                                                                                                      ('2027-01-05', '2027-01-10', 50, 600, 300, 'PLANNED', 4, 'AT124', 'AT116', 9);
+                                                                                                                                                      ('2027-01-05', '2027-01-10', 50, 600, 300, 'PLANNED', 4, 'AT124', 'AT113', 9);
+-- minimum participants: 20% of the seats, at least 2
+UPDATE trip SET tr_min_participants = GREATEST(2, FLOOR(tr_maxseats / 5));
 
--- Link Destinations (One per trip to satisfy 'Travel_To' target of 14)
-INSERT INTO travel_to (to_tr_id, to_dst_id, to_arrival, to_departure) VALUES
-                                                                          (1,1,NOW(),NOW()), (2,2,NOW(),NOW()), (3,3,NOW(),NOW()), (4,4,NOW(),NOW()),
-                                                                          (5,5,NOW(),NOW()), (6,6,NOW(),NOW()), (7,7,NOW(),NOW()), (8,8,NOW(),NOW()),
-                                                                          (9,9,NOW(),NOW()), (10,10,NOW(),NOW()), (11,1,NOW(),NOW()), (12,2,NOW(),NOW()),
-                                                                          (13,3,NOW(),NOW()), (14,4,NOW(),NOW());
+
+-- Destinations of each trip with real stay dates and visit order (to_sequence).
+-- Trips 1-4 visit two destinations.
+INSERT INTO travel_to (to_tr_id, to_dst_id, to_sequence, to_arrival, to_departure) VALUES
+ (1, 1, 1, '2026-06-01 14:00:00', '2026-06-05 11:00:00'), (1, 2, 2, '2026-06-05 14:00:00', '2026-06-10 11:00:00'),
+ (2, 2, 1, '2026-06-05 14:00:00', '2026-06-09 11:00:00'), (2, 3, 2, '2026-06-09 14:00:00', '2026-06-12 11:00:00'),
+ (3, 3, 1, '2026-06-10 14:00:00', '2026-06-13 11:00:00'), (3, 4, 2, '2026-06-13 14:00:00', '2026-06-15 11:00:00'),
+ (4, 4, 1, '2026-07-01 14:00:00', '2026-07-03 11:00:00'), (4, 5, 2, '2026-07-03 14:00:00', '2026-07-05 11:00:00'),
+ (5, 5, 1, '2026-07-05 14:00:00', '2026-07-10 11:00:00'),
+ (6, 6, 1, '2026-07-15 14:00:00', '2026-07-20 11:00:00'),
+ (7, 7, 1, '2026-08-01 14:00:00', '2026-08-08 11:00:00'),
+ (8, 8, 1, '2026-08-10 14:00:00', '2026-08-15 11:00:00'),
+ (9, 9, 1, '2026-09-01 14:00:00', '2026-09-10 11:00:00'),
+ (10, 10, 1, '2026-09-15 14:00:00', '2026-09-20 11:00:00'),
+ (11, 1, 1, '2026-10-01 14:00:00', '2026-10-10 11:00:00'),
+ (12, 2, 1, '2026-11-01 14:00:00', '2026-11-05 11:00:00'),
+ (13, 3, 1, '2026-12-20 14:00:00', '2026-12-27 11:00:00'),
+ (14, 4, 1, '2027-01-05 14:00:00', '2027-01-10 11:00:00');
 
 -- Reservations (Target: 24)
 INSERT INTO reservation (res_tr_id, res_seatnum, res_cust_id, res_status) VALUES
@@ -260,6 +231,14 @@ INSERT INTO event (ev_tr_id, ev_start, ev_end, ev_descr) VALUES
                                                              (7, '2026-08-02 10:00', '2026-08-02 12:00', 'Hike'), (7, '2026-08-03 18:00', '2026-08-03 20:00', 'Camp'),
                                                              (8, '2026-08-11 10:00', '2026-08-11 12:00', 'Drive'), (8, '2026-08-12 18:00', '2026-08-12 20:00', 'Stop'),
                                                              (9, '2026-09-02 10:00', '2026-09-02 12:00', 'Fly'), (9, '2026-09-03 18:00', '2026-09-03 20:00', 'Land');
+-- more events (every trip has at least one event; 20 rows = 2 x 10 minimum)
+INSERT INTO event (ev_tr_id, ev_start, ev_end, ev_descr) VALUES
+    (13, '2026-12-21 10:00:00', '2026-12-21 13:00:00', 'Christmas market walk'),
+    (14, '2027-01-06 10:00:00', '2027-01-06 12:30:00', 'Guided city tour'),
+    (10, '2026-09-16 09:00:00', '2026-09-16 12:00:00', 'Manhattan walking tour'),
+    (11, '2026-10-02 10:00:00', '2026-10-02 13:00:00', 'Louvre visit'),
+    (12, '2026-11-02 10:00:00', '2026-11-02 12:00:00', 'Thames boat tour');
+
 
 -- 1. Update Emails (Pattern: name.lname@mail.com)
 UPDATE customer
@@ -282,28 +261,17 @@ SET cust_birth_date = DATE_ADD('2015-01-01', INTERVAL FLOOR(RAND() * 1800) DAY)
 WHERE cust_id > 15;
 
 
-INSERT INTO lodging (lg_dst_id, lg_name, lg_type, lg_stars, lg_rating, lg_status, lg_address, lg_city, lg_phone, lg_email, lg_total_rooms, lg_cost_per_night, lg_wifi, lg_restaurant_bar, lg_ac, lg_access_disability) VALUES
-                                                                                                                                                                                                                           (1, 'Le Grand Paris', 'Hotel', 5, 4.8, 'Active', '10 Rue de Rivoli', 'Paris', '3310000001', 'contact@grandparis.fr', 100, 250.00, 1, 1, 1, 1),
-                                                                                                                                                                                                                           (2, 'London Stay', 'Hostel', NULL, 3.5, 'Active', '22 Baker St', 'London', '4420000002', 'info@londonstay.uk', 30, 60.00, 1, 0, 0, 0),
-                                                                                                                                                                                                                           (3, 'Berlin Plaza', 'Hotel', 4, 4.2, 'Active', 'Alexanderplatz 1', 'Berlin', '4930000003', 'booking@berlinplaza.de', 80, 120.00, 1, 1, 1, 1),
-                                                                                                                                                                                                                           (4, 'Roma Bella', 'Apartment', NULL, 4.9, 'Active', 'Via Roma 10', 'Rome', '3906000004', 'hello@romabella.it', 5, 150.00, 1, 0, 1, 0),
-                                                                                                                                                                                                                           (5, 'Madrid Sol', 'Hotel', 3, 4.0, 'Active', 'Puerta del Sol', 'Madrid', '3491000005', 'reception@madridsol.es', 50, 90.00, 1, 0, 1, 1),
-                                                                                                                                                                                                                           (6, 'Nafplio Palace', 'Resort', 5, 4.7, 'Active', 'Acronafplia', 'Nafplio', '3027520006', 'reservations@nafplio.gr', 60, 200.00, 1, 1, 1, 1),
-                                                                                                                                                                                                                           (7, 'Meteora View', 'Room', NULL, 4.5, 'Active', 'Kalambaka Main Rd', 'Kalambaka', '3024320007', 'rooms@meteora.gr', 10, 50.00, 0, 0, 1, 0),
-                                                                                                                                                                                                                           (8, 'Delphi Omni', 'Hotel', 3, 3.8, 'Active', 'Apollonos St', 'Delphi', '3022650008', 'info@delphiomni.gr', 40, 80.00, 1, 1, 1, 0),
-                                                                                                                                                                                                                           (9, 'NYC Central', 'Hotel', 4, 4.3, 'Active', '5th Avenue', 'New York', '1212000009', 'stay@nyccentral.us', 200, 300.00, 1, 1, 1, 1),
-                                                                                                                                                                                                                           (10, 'Tokyo Capsule', 'Hostel', NULL, 4.1, 'Active', 'Shinjuku', 'Tokyo', '8130000010', 'sleep@tokyo.jp', 500, 40.00, 1, 0, 1, 1);
-CALL sp_book_trip_accommodation(1);
-CALL sp_book_trip_accommodation(2);
-CALL sp_book_trip_accommodation(3);
-CALL sp_book_trip_accommodation(4);
-CALL sp_book_trip_accommodation(5);
-CALL sp_book_trip_accommodation(6);
-CALL sp_book_trip_accommodation(7);
-CALL sp_book_trip_accommodation(8);
-CALL sp_book_trip_accommodation(9);
-CALL sp_book_trip_accommodation(10);
-CALL sp_book_trip_accommodation(11);
-CALL sp_book_trip_accommodation(12);
-CALL sp_book_trip_accommodation(13);
-CALL sp_book_trip_accommodation(14);
+INSERT INTO lodging (lg_dst_id, lg_name, lg_type, lg_stars, lg_rating, lg_status, lg_address, lg_city, lg_postal_code, lg_phone, lg_email, lg_total_rooms, lg_cost_per_night, lg_wifi, lg_restaurant_bar, lg_ac, lg_access_disability) VALUES
+                                                                                                                                                                                                                           (1, 'Le Grand Paris', 'Hotel', 5, 4.8, 'Active', '10 Rue de Rivoli', 'Paris', '75001', '3310000001', 'contact@grandparis.fr', 100, 250.00, 1, 1, 1, 1),
+                                                                                                                                                                                                                           (2, 'London Stay', 'Hostel', NULL, 3.5, 'Active', '22 Baker St', 'London', 'NW1 6XE', '4420000002', 'info@londonstay.uk', 30, 60.00, 1, 0, 0, 0),
+                                                                                                                                                                                                                           (3, 'Berlin Plaza', 'Hotel', 4, 4.2, 'Active', 'Alexanderplatz 1', 'Berlin', '10178', '4930000003', 'booking@berlinplaza.de', 80, 120.00, 1, 1, 1, 1),
+                                                                                                                                                                                                                           (4, 'Roma Bella', 'Apartment', NULL, 4.9, 'Active', 'Via Roma 10', 'Rome', '00184', '3906000004', 'hello@romabella.it', 5, 150.00, 1, 0, 1, 0),
+                                                                                                                                                                                                                           (5, 'Madrid Sol', 'Hotel', 3, 4.0, 'Active', 'Puerta del Sol', 'Madrid', '28013', '3491000005', 'reception@madridsol.es', 50, 90.00, 1, 0, 1, 1),
+                                                                                                                                                                                                                           (6, 'Nafplio Palace', 'Resort', 5, 4.7, 'Active', 'Acronafplia', 'Nafplio', '21100', '3027520006', 'reservations@nafplio.gr', 60, 200.00, 1, 1, 1, 1),
+                                                                                                                                                                                                                           (7, 'Meteora View', 'Room', NULL, 4.5, 'Active', 'Kalambaka Main Rd', 'Kalambaka', '42200', '3024320007', 'rooms@meteora.gr', 10, 50.00, 0, 0, 1, 0),
+                                                                                                                                                                                                                           (8, 'Delphi Omni', 'Hotel', 3, 3.8, 'Active', 'Apollonos St', 'Delphi', '33054', '3022650008', 'info@delphiomni.gr', 40, 80.00, 1, 1, 1, 0),
+                                                                                                                                                                                                                           (9, 'NYC Central', 'Hotel', 4, 4.3, 'Active', '5th Avenue', 'New York', '10118', '1212000009', 'stay@nyccentral.us', 200, 300.00, 1, 1, 1, 1),
+                                                                                                                                                                                                                           (10, 'Tokyo Capsule', 'Hostel', NULL, 4.1, 'Active', 'Shinjuku', 'Tokyo', '160-0022', '8130000010', 'sleep@tokyo.jp', 500, 40.00, 1, 0, 1, 1);
+
+-- Trip history (3.1.2.3): 90 000 generated completed trips
+CALL sp_generate_dummy_history();

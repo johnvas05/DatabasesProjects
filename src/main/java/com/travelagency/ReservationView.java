@@ -3,11 +3,14 @@ package com.travelagency;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
 import java.sql.SQLException;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class ReservationView {
 
@@ -49,60 +52,79 @@ public class ReservationView {
         table.getColumns().addAll(trCol, custCol, seatCol, statusCol, costCol);
         refreshTable();
 
-        // Form
-        // We need ComboBoxes for selecting Client and Trip
+        // Form (3.2.2): customer and trip from the database, seat from the free
+        // seats of the chosen trip, status from the allowed values. The cost is
+        // computed by sp_calculate_reservation_cost (adult/child price by age).
         ComboBox<Customer> cmbCustomer = new ComboBox<>();
         cmbCustomer.setPromptText("Select Customer");
 
         ComboBox<Trip> cmbTrip = new ComboBox<>();
         cmbTrip.setPromptText("Select Trip");
 
-        // Populate combos
+        ComboBox<Integer> cmbSeat = new ComboBox<>();
+        cmbSeat.setPromptText("Free seat");
+
         try {
             cmbCustomer.getItems().addAll(cDao.getAllCustomers());
             cmbTrip.getItems().addAll(tDao.getAllTrips());
-
-            // Need toString helper in Trip too for nice display
         } catch (SQLException e) {
             e.printStackTrace();
         }
 
-        TextField txtSeat = new TextField();
-        txtSeat.setPromptText("Seat Num");
-        ComboBox<String> cmbStatus = new ComboBox<>();
-        cmbStatus.getItems().addAll("PENDING", "PAID", "CONFIRMED", "CANCELLED");
-        cmbStatus.setValue("PENDING");
-        cmbStatus.setPromptText("Status");
+        cmbTrip.setOnAction(e -> {
+            cmbSeat.getItems().clear();
+            Trip trip = cmbTrip.getValue();
+            if (trip == null) {
+                return;
+            }
+            try {
+                Set<Integer> taken = new HashSet<>();
+                for (Reservation r : rDao.getReservationsByTripId(trip.getId())) {
+                    taken.add(r.getSeatNum());
+                }
+                for (int seat = 1; seat <= trip.getMaxSeats(); seat++) {
+                    if (!taken.contains(seat)) {
+                        cmbSeat.getItems().add(seat);
+                    }
+                }
+                cmbSeat.setPromptText(cmbSeat.getItems().isEmpty() ? "Trip is full"
+                        : "Free seat (" + cmbSeat.getItems().size() + " left)");
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+            }
+        });
 
-        TextField txtCost = new TextField();
-        txtCost.setPromptText("Cost");
+        ComboBox<String> cmbStatus = new ComboBox<>();
+        cmbStatus.getItems().addAll("PENDING", "CONFIRMED", "PAID", "CANCELLED");
+        cmbStatus.setValue("PENDING");
 
         Button btnAdd = new Button("Book Reservation");
         btnAdd.setOnAction(e -> {
             try {
-                if (cmbCustomer.getValue() == null || cmbTrip.getValue() == null) {
-                    showAlert("Warning", "Select Customer and Trip.");
+                if (cmbCustomer.getValue() == null || cmbTrip.getValue() == null || cmbSeat.getValue() == null) {
+                    showAlert("Validation Error", "Select a customer, a trip and a free seat.");
                     return;
                 }
-
                 Reservation r = new Reservation(
                         cmbTrip.getValue().getId(),
-                        Integer.parseInt(txtSeat.getText()),
+                        cmbSeat.getValue(),
                         cmbCustomer.getValue().getId(),
-                        cmbStatus.getValue(), // Selected status
-                        Double.parseDouble(txtCost.getText()));
+                        cmbStatus.getValue(),
+                        0);
                 rDao.addReservation(r);
                 refreshTable();
-                txtSeat.clear();
-                txtCost.clear();
+                cmbTrip.getOnAction().handle(null); // refresh the free seats
             } catch (SQLException ex) {
                 showAlert("Error", "Database Error: " + ex.getMessage());
-            } catch (NumberFormatException ex) {
-                showAlert("Error", "Check numeric fields.");
             }
         });
 
-        HBox form = new HBox(10, cmbCustomer, cmbTrip, txtSeat, cmbStatus, txtCost, btnAdd);
+        FlowPane form = Forms.row(
+                Forms.field("Customer * (age decides the price)", cmbCustomer, 230),
+                Forms.field("Trip *", cmbTrip, 230),
+                Forms.field("Seat * (free seats of the trip)", cmbSeat, 180),
+                Forms.field("Status", cmbStatus, 140),
+                Forms.action(btnAdd));
 
         layout.getChildren().addAll(title, table, form);
         return layout;

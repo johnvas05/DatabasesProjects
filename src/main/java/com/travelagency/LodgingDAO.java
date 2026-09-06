@@ -44,7 +44,11 @@ public class LodgingDAO {
             pstmt.setInt(1, lodging.getDestinationId());
             pstmt.setString(2, lodging.getName());
             pstmt.setString(3, lodging.getType());
-            pstmt.setInt(4, lodging.getStars());
+            if (lodging.getStars() > 0) {
+                pstmt.setInt(4, lodging.getStars());
+            } else {
+                pstmt.setNull(4, Types.INTEGER);
+            }
             pstmt.setDouble(5, lodging.getRating());
             pstmt.setString(6, lodging.getStatus());
             pstmt.setString(7, lodging.getAddress());

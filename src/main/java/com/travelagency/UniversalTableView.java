@@ -4,6 +4,7 @@ import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
@@ -11,25 +12,47 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 import java.sql.SQLException;
+import java.sql.Types;
+import java.time.LocalDate;
 import java.util.*;
+import java.util.function.Supplier;
 
+/**
+ * Requirement 3.2.1: pick any table of the database, see its rows and insert,
+ * update or delete rows.
+ *
+ * Requirement 3.2.2: the insert/update dialog restricts input wherever the
+ * schema allows it. Foreign-key columns are drop-downs filled from the
+ * referenced table (e.g. the list of destinations when adding a destination to
+ * a trip), ENUM columns are drop-downs of their values, DATE columns use a date
+ * picker, DATETIME columns a date picker plus an hour list, BOOLEAN columns a
+ * check box and numeric columns only accept digits.
+ */
 public class UniversalTableView extends VBox {
 
-    private ComboBox<String> tableSelector;
-    private TableView<Map<String, Object>> dataTable;
-    private Button insertBtn, updateBtn, deleteBtn, refreshBtn;
+    private final ComboBox<String> tableSelector;
+    private final TableView<Map<String, Object>> dataTable;
     private String currentTable;
-    private List<String> primaryKeys;
+    private List<String> primaryKeys = new ArrayList<>();
+
+    /** One editor per column of the dialog. */
+    private static class ColumnEditor {
+        final Node node;
+        final Supplier<String> value;
+
+        ColumnEditor(Node node, Supplier<String> value) {
+            this.node = node;
+            this.value = value;
+        }
+    }
 
     public UniversalTableView() {
         setSpacing(15);
         setPadding(new Insets(20));
 
-        // Title
         Label title = new Label("Universal Table Manager");
         title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
 
-        // Table selector
         HBox selectorBox = new HBox(10);
         selectorBox.setAlignment(Pos.CENTER_LEFT);
         Label selectorLabel = new Label("Select Table:");
@@ -38,45 +61,45 @@ public class UniversalTableView extends VBox {
         tableSelector = new ComboBox<>();
         tableSelector.setPrefWidth(250);
         tableSelector.setOnAction(e -> loadTable());
-
         selectorBox.getChildren().addAll(selectorLabel, tableSelector);
 
-        // Data table
         dataTable = new TableView<>();
-        // Remove CONSTRAINED_RESIZE_POLICY to allow horizontal scrolling when needed
         VBox.setVgrow(dataTable, Priority.ALWAYS);
 
-        // Action buttons
         HBox buttonBox = new HBox(10);
         buttonBox.setAlignment(Pos.CENTER);
 
-        insertBtn = new Button("Insert Row");
+        Button insertBtn = new Button("Insert Row");
         insertBtn.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;");
-        insertBtn.setOnAction(e -> showInsertDialog());
+        insertBtn.setOnAction(e -> showRowDialog(null));
 
-        updateBtn = new Button("Update Row");
+        Button updateBtn = new Button("Update Row");
         updateBtn.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white;");
-        updateBtn.setOnAction(e -> showUpdateDialog());
+        updateBtn.setOnAction(e -> {
+            Map<String, Object> selected = dataTable.getSelectionModel().getSelectedItem();
+            if (selected == null) {
+                showWarning("Please select a row to update");
+            } else {
+                showRowDialog(selected);
+            }
+        });
 
-        deleteBtn = new Button("Delete Row");
+        Button deleteBtn = new Button("Delete Row");
         deleteBtn.setStyle("-fx-background-color: #f44336; -fx-text-fill: white;");
         deleteBtn.setOnAction(e -> deleteRow());
 
-        refreshBtn = new Button("Refresh");
+        Button refreshBtn = new Button("Refresh");
         refreshBtn.setOnAction(e -> loadTable());
 
         buttonBox.getChildren().addAll(insertBtn, updateBtn, deleteBtn, refreshBtn);
-
         getChildren().addAll(title, selectorBox, dataTable, buttonBox);
 
-        // Load table names
         loadTableNames();
     }
 
     private void loadTableNames() {
         try {
-            List<String> tables = UniversalTableManager.getAllTableNames();
-            tableSelector.setItems(FXCollections.observableArrayList(tables));
+            tableSelector.setItems(FXCollections.observableArrayList(UniversalTableManager.getAllTableNames()));
         } catch (SQLException e) {
             showError("Failed to load table names", e);
         }
@@ -84,112 +107,105 @@ public class UniversalTableView extends VBox {
 
     private void loadTable() {
         currentTable = tableSelector.getValue();
-        if (currentTable == null || currentTable.isEmpty())
+        if (currentTable == null || currentTable.isEmpty()) {
             return;
-
+        }
         try {
-            // Get table metadata
             List<UniversalTableManager.ColumnInfo> columns = UniversalTableManager.getTableColumns(currentTable);
             primaryKeys = UniversalTableManager.getPrimaryKeys(currentTable);
 
-            // Clear existing columns
             dataTable.getColumns().clear();
-
-            // Create dynamic columns
             for (UniversalTableManager.ColumnInfo col : columns) {
                 TableColumn<Map<String, Object>, Object> column = new TableColumn<>(col.name);
-
-                // Set max width to prevent very wide columns from hiding others
                 column.setMaxWidth(300);
                 column.setPrefWidth(150);
-
-                column.setCellValueFactory(cellData -> {
-                    Object value = cellData.getValue().get(col.name);
-                    return new SimpleObjectProperty<>(value);
-                });
-
+                column.setCellValueFactory(cellData -> new SimpleObjectProperty<>(cellData.getValue().get(col.name)));
                 column.setCellFactory(tc -> new TableCell<Map<String, Object>, Object>() {
                     @Override
                     protected void updateItem(Object item, boolean empty) {
                         super.updateItem(item, empty);
-                        if (empty || item == null) {
-                            setText(null);
-                        } else {
-                            setText(item.toString());
-                        }
+                        setText(empty || item == null ? null : item.toString());
                     }
                 });
-
                 dataTable.getColumns().add(column);
             }
-
-            // Load data
-            List<Map<String, Object>> rows = UniversalTableManager.getAllRows(currentTable);
-            dataTable.setItems(FXCollections.observableArrayList(rows));
-
+            dataTable.setItems(FXCollections.observableArrayList(UniversalTableManager.getAllRows(currentTable)));
         } catch (SQLException e) {
-            showError("Failed to load table data", e);
+            showError("Failed to load table " + currentTable, e);
         }
     }
 
-    private void showInsertDialog() {
+    /** Insert (selectedRow == null) or update (selectedRow != null) dialog. */
+    private void showRowDialog(Map<String, Object> selectedRow) {
         if (currentTable == null) {
             showWarning("Please select a table first");
             return;
         }
-
+        boolean isUpdate = selectedRow != null;
         try {
             List<UniversalTableManager.ColumnInfo> columns = UniversalTableManager.getTableColumns(currentTable);
+            Map<String, String> sqlTypes = UniversalTableManager.getColumnSqlTypes(currentTable);
+            Map<String, String[]> foreignKeys = UniversalTableManager.getForeignKeys(currentTable);
 
             Stage dialog = new Stage();
             dialog.initModality(Modality.APPLICATION_MODAL);
-            dialog.setTitle("Insert Row - " + currentTable);
+            dialog.setTitle((isUpdate ? "Update Row - " : "Insert Row - ") + currentTable);
 
             GridPane grid = new GridPane();
             grid.setPadding(new Insets(20));
             grid.setHgap(10);
             grid.setVgap(10);
 
-            Map<String, TextField> fieldMap = new LinkedHashMap<>();
+            Map<String, ColumnEditor> editors = new LinkedHashMap<>();
             int row = 0;
-
             for (UniversalTableManager.ColumnInfo col : columns) {
-                // Skip auto-increment primary keys
-                if (col.autoIncrement && primaryKeys.contains(col.name)) {
-                    continue;
+                boolean isPk = primaryKeys.contains(col.name);
+                if (!isUpdate && col.autoIncrement && isPk) {
+                    continue; // generated by the database
                 }
-
-                Label label = new Label(col.name + ":");
-                TextField field = new TextField();
-
-                if (!col.nullable) {
-                    label.setText(col.name + " *:");
+                Object current = isUpdate ? selectedRow.get(col.name) : null;
+                ColumnEditor editor = createEditor(col, sqlTypes.get(col.name), foreignKeys.get(col.name), current);
+                if (isUpdate && isPk) {
+                    editor.node.setDisable(true);
                 }
-
+                Label label = new Label(col.name + (col.nullable ? ":" : " *:"));
                 grid.add(label, 0, row);
-                grid.add(field, 1, row);
-                fieldMap.put(col.name, field);
+                grid.add(editor.node, 1, row);
+                Label hint = new Label(hintFor(sqlTypes.get(col.name), foreignKeys.get(col.name)));
+                hint.setStyle("-fx-text-fill: gray; -fx-font-size: 11px;");
+                grid.add(hint, 2, row);
+                editors.put(col.name, editor);
                 row++;
             }
 
-            Button saveBtn = new Button("Insert");
-            saveBtn.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;");
+            Button saveBtn = new Button(isUpdate ? "Update" : "Insert");
+            saveBtn.setStyle("-fx-background-color: " + (isUpdate ? "#2196F3" : "#4CAF50") + "; -fx-text-fill: white;");
             saveBtn.setOnAction(e -> {
                 try {
-                    Map<String, Object> values = new HashMap<>();
-                    for (Map.Entry<String, TextField> entry : fieldMap.entrySet()) {
-                        String value = entry.getValue().getText().trim();
-                        if (!value.isEmpty()) {
-                            values.put(entry.getKey(), value);
+                    Map<String, Object> values = new LinkedHashMap<>();
+                    Map<String, Object> where = new LinkedHashMap<>();
+                    for (Map.Entry<String, ColumnEditor> entry : editors.entrySet()) {
+                        String v = entry.getValue().value.get();
+                        boolean isPk = primaryKeys.contains(entry.getKey());
+                        if (isUpdate && isPk) {
+                            where.put(entry.getKey(), selectedRow.get(entry.getKey()));
+                        } else if (v != null && !v.isEmpty()) {
+                            values.put(entry.getKey(), v);
+                        } else if (isUpdate) {
+                            values.put(entry.getKey(), null);
                         }
                     }
-
-                    UniversalTableManager.executeInsert(currentTable, values);
-                    showInfo("Row inserted successfully");
+                    if (isUpdate) {
+                        UniversalTableManager.executeUpdate(currentTable, values, where);
+                        showInfo("Row updated successfully");
+                    } else {
+                        UniversalTableManager.executeInsert(currentTable, values);
+                        showInfo("Row inserted successfully");
+                    }
                     loadTable();
                     dialog.close();
                 } catch (SQLException ex) {
-                    showError("Insert failed", ex);
+                    showError((isUpdate ? "Update" : "Insert") + " failed", ex);
                 }
             });
 
@@ -198,101 +214,124 @@ public class UniversalTableView extends VBox {
 
             HBox btnBox = new HBox(10, saveBtn, cancelBtn);
             btnBox.setAlignment(Pos.CENTER);
-            grid.add(btnBox, 0, row, 2, 1);
+            grid.add(btnBox, 0, row, 3, 1);
 
-            Scene scene = new Scene(grid);
-            dialog.setScene(scene);
+            ScrollPane scroll = new ScrollPane(grid);
+            scroll.setFitToWidth(true);
+            dialog.setScene(new Scene(scroll, 640, Math.min(80 + row * 42, 700)));
             dialog.showAndWait();
-
         } catch (SQLException e) {
-            showError("Failed to open insert dialog", e);
+            showError("Failed to open dialog", e);
         }
     }
 
-    private void showUpdateDialog() {
-        Map<String, Object> selectedRow = dataTable.getSelectionModel().getSelectedItem();
-        if (selectedRow == null) {
-            showWarning("Please select a row to update");
-            return;
-        }
+    /** Builds the editor that fits the column: FK list, enum list, date, boolean, number or text. */
+    private ColumnEditor createEditor(UniversalTableManager.ColumnInfo col, String sqlType, String[] fk,
+            Object current) throws SQLException {
+        String type = sqlType == null ? "" : sqlType.toLowerCase();
+        String currentText = current == null ? "" : current.toString();
 
-        try {
-            List<UniversalTableManager.ColumnInfo> columns = UniversalTableManager.getTableColumns(currentTable);
-
-            Stage dialog = new Stage();
-            dialog.initModality(Modality.APPLICATION_MODAL);
-            dialog.setTitle("Update Row - " + currentTable);
-
-            GridPane grid = new GridPane();
-            grid.setPadding(new Insets(20));
-            grid.setHgap(10);
-            grid.setVgap(10);
-
-            Map<String, TextField> fieldMap = new LinkedHashMap<>();
-            int row = 0;
-
-            for (UniversalTableManager.ColumnInfo col : columns) {
-                Label label = new Label(col.name + ":");
-                TextField field = new TextField();
-
-                // Pre-fill with current value
-                Object currentValue = selectedRow.get(col.name);
-                if (currentValue != null) {
-                    field.setText(currentValue.toString());
-                }
-
-                // Disable primary key fields
-                if (primaryKeys.contains(col.name)) {
-                    field.setDisable(true);
-                }
-
-                grid.add(label, 0, row);
-                grid.add(field, 1, row);
-                fieldMap.put(col.name, field);
-                row++;
+        // 1. Foreign key: choose an existing row of the referenced table
+        if (fk != null) {
+            ComboBox<String> combo = new ComboBox<>();
+            combo.setPrefWidth(320);
+            if (col.nullable) {
+                combo.getItems().add("");
             }
-
-            Button saveBtn = new Button("Update");
-            saveBtn.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white;");
-            saveBtn.setOnAction(e -> {
-                try {
-                    Map<String, Object> values = new HashMap<>();
-                    Map<String, Object> whereClause = new HashMap<>();
-
-                    for (Map.Entry<String, TextField> entry : fieldMap.entrySet()) {
-                        String colName = entry.getKey();
-                        String value = entry.getValue().getText().trim();
-
-                        if (primaryKeys.contains(colName)) {
-                            whereClause.put(colName, value);
-                        } else if (!value.isEmpty()) {
-                            values.put(colName, value);
-                        }
-                    }
-
-                    UniversalTableManager.executeUpdate(currentTable, values, whereClause);
-                    showInfo("Row updated successfully");
-                    loadTable();
-                    dialog.close();
-                } catch (SQLException ex) {
-                    showError("Update failed", ex);
+            combo.getItems().addAll(UniversalTableManager.getReferenceOptions(fk[0], fk[1]));
+            combo.setPromptText("Select " + fk[0]);
+            for (String option : combo.getItems()) {
+                if (!option.isEmpty() && UniversalTableManager.optionKey(option).equals(currentText)) {
+                    combo.setValue(option);
                 }
-            });
-
-            Button cancelBtn = new Button("Cancel");
-            cancelBtn.setOnAction(e -> dialog.close());
-
-            HBox btnBox = new HBox(10, saveBtn, cancelBtn);
-            btnBox.setAlignment(Pos.CENTER);
-            grid.add(btnBox, 0, row, 2, 1);
-
-            Scene scene = new Scene(grid);
-            dialog.setScene(scene);
-            dialog.showAndWait();
-
-        } catch (SQLException e) {
-            showError("Failed to open update dialog", e);
+            }
+            return new ColumnEditor(combo, () -> UniversalTableManager.optionKey(combo.getValue()));
         }
+
+        // 2. ENUM: choose one of the allowed values
+        if (type.startsWith("enum(")) {
+            ComboBox<String> combo = new ComboBox<>();
+            combo.setPrefWidth(320);
+            if (col.nullable) {
+                combo.getItems().add("");
+            }
+            for (String v : type.substring(5, type.length() - 1).split(",")) {
+                combo.getItems().add(v.trim().replaceAll("^'|'$", "").toUpperCase(Locale.ROOT).equals(v.trim().replaceAll("^'|'$", ""))
+                        ? v.trim().replaceAll("^'|'$", "")
+                        : originalCase(sqlType, v.trim().replaceAll("^'|'$", "")));
+            }
+            combo.setValue(currentText);
+            return new ColumnEditor(combo, combo::getValue);
+        }
+
+        // 3. Boolean flags (tinyint(1))
+        if (type.startsWith("tinyint(1)") || type.equals("bit(1)") || type.equals("boolean")) {
+            CheckBox box = new CheckBox();
+            box.setSelected("1".equals(currentText) || "true".equalsIgnoreCase(currentText));
+            return new ColumnEditor(box, () -> box.isSelected() ? "1" : "0");
+        }
+
+        // 4. Dates
+        if (col.type == Types.DATE) {
+            DatePicker picker = new DatePicker();
+            if (!currentText.isEmpty()) {
+                picker.setValue(LocalDate.parse(currentText.substring(0, 10)));
+            }
+            return new ColumnEditor(picker, () -> picker.getValue() == null ? "" : picker.getValue().toString());
+        }
+        if (col.type == Types.TIMESTAMP || type.startsWith("datetime")) {
+            DatePicker picker = new DatePicker();
+            ComboBox<String> hour = new ComboBox<>();
+            for (int h = 0; h < 24; h++) {
+                hour.getItems().add(String.format("%02d:00", h));
+            }
+            hour.setValue("12:00");
+            if (!currentText.isEmpty()) {
+                picker.setValue(LocalDate.parse(currentText.substring(0, 10)));
+                if (currentText.length() >= 16) {
+                    hour.setValue(currentText.substring(11, 13) + ":00");
+                }
+            }
+            HBox box = new HBox(5, picker, hour);
+            return new ColumnEditor(box, () -> picker.getValue() == null ? ""
+                    : picker.getValue() + " " + hour.getValue() + ":00");
+        }
+
+        // 5. Numbers: digits only (and a decimal point for decimals)
+        TextField field = new TextField(currentText);
+        field.setPrefWidth(320);
+        boolean integer = col.type == Types.INTEGER || col.type == Types.SMALLINT || col.type == Types.TINYINT
+                || col.type == Types.BIGINT;
+        boolean decimal = col.type == Types.DECIMAL || col.type == Types.NUMERIC || col.type == Types.DOUBLE
+                || col.type == Types.FLOAT || col.type == Types.REAL;
+        if (integer || decimal) {
+            String pattern = decimal ? "-?\\d*(\\.\\d*)?" : "-?\\d*";
+            field.setTextFormatter(new TextFormatter<>(change -> change.getControlNewText().matches(pattern) ? change : null));
+            field.setPromptText(decimal ? "number, e.g. 120.50" : "whole number");
+        } else if (type.startsWith("varchar(") || type.startsWith("char(")) {
+            int max = Integer.parseInt(type.replaceAll("\\D", ""));
+            field.setTextFormatter(new TextFormatter<>(change -> change.getControlNewText().length() <= max ? change : null));
+            field.setPromptText("max " + max + " characters");
+        }
+        return new ColumnEditor(field, field::getText);
+    }
+
+    /** Enum values are case-sensitive on display; recover the original case from the SQL type. */
+    private static String originalCase(String sqlType, String lowered) {
+        for (String v : sqlType.substring(5, sqlType.length() - 1).split(",")) {
+            String clean = v.trim().replaceAll("^'|'$", "");
+            if (clean.equalsIgnoreCase(lowered)) {
+                return clean;
+            }
+        }
+        return lowered;
+    }
+
+    private static String hintFor(String sqlType, String[] fk) {
+        if (fk != null) {
+            return "from " + fk[0] + "." + fk[1];
+        }
+        return sqlType == null ? "" : sqlType;
     }
 
     private void deleteRow() {
@@ -301,33 +340,30 @@ public class UniversalTableView extends VBox {
             showWarning("Please select a row to delete");
             return;
         }
-
+        if (primaryKeys.isEmpty()) {
+            showWarning("Table " + currentTable + " has no primary key; delete it with SQL.");
+            return;
+        }
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("Confirm Delete");
-        confirm.setHeaderText("Delete this row?");
-        confirm.setContentText("This action cannot be undone.");
-
+        confirm.setHeaderText("Delete this row from " + currentTable + "?");
+        confirm.setContentText(selectedRow.toString());
         confirm.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
                 try {
-                    Map<String, Object> whereClause = new HashMap<>();
+                    Map<String, Object> where = new LinkedHashMap<>();
                     for (String pk : primaryKeys) {
-                        whereClause.put(pk, selectedRow.get(pk));
+                        where.put(pk, selectedRow.get(pk));
                     }
-
-                    UniversalTableManager.executeDelete(currentTable, whereClause);
+                    UniversalTableManager.executeDelete(currentTable, where);
                     showInfo("Row deleted successfully");
                     loadTable();
                 } catch (SQLException e) {
-                    // Check if it's a foreign key constraint error
-                    if (e.getMessage().contains("foreign key constraint") ||
-                            e.getMessage().contains("Cannot delete or update a parent row")) {
-
+                    if (e.getMessage() != null && e.getMessage().toLowerCase().contains("foreign key")) {
                         Alert fkError = new Alert(Alert.AlertType.ERROR);
-                        fkError.setTitle("Cannot Delete - Foreign Key Constraint");
-                        fkError.setHeaderText("This row is referenced by other tables");
-                        fkError.setContentText("You must first delete any child records that reference this row.\n\n" +
-                                "Database Error: " + e.getMessage());
+                        fkError.setTitle("Delete blocked");
+                        fkError.setHeaderText("Other rows reference this row");
+                        fkError.setContentText("Delete or change the rows that reference it first.\n\n" + e.getMessage());
                         fkError.showAndWait();
                     } else {
                         showError("Delete failed", e);
@@ -348,14 +384,16 @@ public class UniversalTableView extends VBox {
     private void showWarning(String message) {
         Alert alert = new Alert(Alert.AlertType.WARNING);
         alert.setTitle("Warning");
-        alert.setHeaderText(message);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
         alert.showAndWait();
     }
 
     private void showInfo(String message) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Success");
-        alert.setHeaderText(message);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
         alert.showAndWait();
     }
 }

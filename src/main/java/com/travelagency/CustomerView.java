@@ -3,6 +3,7 @@ package com.travelagency;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
@@ -81,7 +82,14 @@ public class CustomerView {
             }
         });
 
-        HBox form = new HBox(10, txtFirst, txtLast, txtEmail, txtPhone, dobPicker, btnAdd);
+        FlowPane form = Forms.row(
+                Forms.field("First name *", txtFirst),
+                Forms.field("Last name *", txtLast),
+                Forms.field("Email", txtEmail, 200),
+                Forms.field("Phone", txtPhone),
+                Forms.field("Address", txtAddress, 200),
+                Forms.field("Birth date * (decides adult/child price)", dobPicker, 180),
+                Forms.action(btnAdd));
 
         layout.getChildren().addAll(title, table, form);
         return layout;

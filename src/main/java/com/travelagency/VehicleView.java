@@ -3,6 +3,7 @@ package com.travelagency;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
@@ -27,91 +28,104 @@ public class VehicleView {
         title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
 
         // Table Columns
-        TableColumn<Vehicle, String> plateCol = new TableColumn<>("License Plate");
+        TableColumn<Vehicle, Integer> idCol = new TableColumn<>("ID");
+        idCol.setCellValueFactory(new PropertyValueFactory<>("id"));
+        TableColumn<Vehicle, String> plateCol = new TableColumn<>("Plate");
         plateCol.setCellValueFactory(new PropertyValueFactory<>("licensePlate"));
-
-        TableColumn<Vehicle, String> modelCol = new TableColumn<>("Model");
-        modelCol.setCellValueFactory(new PropertyValueFactory<>("model"));
-
         TableColumn<Vehicle, String> brandCol = new TableColumn<>("Brand");
         brandCol.setCellValueFactory(new PropertyValueFactory<>("brand"));
-
+        TableColumn<Vehicle, String> modelCol = new TableColumn<>("Model");
+        modelCol.setCellValueFactory(new PropertyValueFactory<>("model"));
         TableColumn<Vehicle, String> typeCol = new TableColumn<>("Type");
         typeCol.setCellValueFactory(new PropertyValueFactory<>("type"));
-
+        TableColumn<Vehicle, Integer> seatsCol = new TableColumn<>("Seats");
+        seatsCol.setCellValueFactory(new PropertyValueFactory<>("seats"));
         TableColumn<Vehicle, String> statusCol = new TableColumn<>("Status");
         statusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
-
         TableColumn<Vehicle, Integer> mileageCol = new TableColumn<>("Mileage");
         mileageCol.setCellValueFactory(new PropertyValueFactory<>("mileage"));
+        TableColumn<Vehicle, Integer> branchCol = new TableColumn<>("Branch");
+        branchCol.setCellValueFactory(new PropertyValueFactory<>("branchCode"));
 
-        table.getColumns().addAll(plateCol, modelCol, brandCol, typeCol, statusCol, mileageCol);
+        table.getColumns().addAll(idCol, plateCol, brandCol, modelCol, typeCol, seatsCol, statusCol, mileageCol,
+                branchCol);
         refreshTable();
 
-        // Form
+        // Form (3.2.2: lists for branch, type and status; numeric-only seats and mileage)
         TextField txtPlate = new TextField();
         txtPlate.setPromptText("License Plate");
-        TextField txtModel = new TextField();
-        txtModel.setPromptText("Model");
         TextField txtBrand = new TextField();
         txtBrand.setPromptText("Brand");
-        TextField txtStatus = new TextField(); // Could be ComboBox
-        txtStatus.setPromptText("Status");
-        TextField txtMileage = new TextField();
-        txtMileage.setPromptText("Mileage");
-        TextField txtSeats = new TextField();
-        txtSeats.setPromptText("Seats");
-
-        ComboBox<Branch> cmbBranch = new ComboBox<>();
-        cmbBranch.setPromptText("Select Branch");
-        try {
-            BranchDAO branchDAO = new BranchDAO();
-            cmbBranch.getItems().addAll(branchDAO.getAllBranches());
-        } catch (SQLException ex) {
-            ex.printStackTrace();
-        }
+        TextField txtModel = new TextField();
+        txtModel.setPromptText("Model");
 
         ComboBox<String> cmbType = new ComboBox<>();
         cmbType.getItems().addAll("Bus", "Mini-Bus", "Van", "Car");
         cmbType.setPromptText("Type");
 
+        TextField txtSeats = new TextField();
+        txtSeats.setPromptText("Seats");
+        txtSeats.setTextFormatter(new TextFormatter<>(c -> c.getControlNewText().matches("\\d*") ? c : null));
+        cmbType.setOnAction(e -> {
+            String t = cmbType.getValue();
+            if (t != null) {
+                txtSeats.setPromptText(switch (t) {
+                    case "Bus" -> "Seats (> 20)";
+                    case "Mini-Bus" -> "Seats (10-20)";
+                    case "Van" -> "Seats (6-9)";
+                    default -> "Seats (1-5)";
+                });
+            }
+        });
+
+        ComboBox<String> cmbStatus = new ComboBox<>();
+        cmbStatus.getItems().addAll("Available", "InUse", "Maintenance");
+        cmbStatus.setValue("Available");
+
+        TextField txtMileage = new TextField("0");
+        txtMileage.setPromptText("Mileage (km)");
+        txtMileage.setTextFormatter(new TextFormatter<>(c -> c.getControlNewText().matches("\\d*") ? c : null));
+
+        ComboBox<Branch> cmbBranch = new ComboBox<>();
+        cmbBranch.setPromptText("Select Branch");
+        try {
+            cmbBranch.getItems().addAll(new BranchDAO().getAllBranches());
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+
         Button btnAdd = new Button("Add Vehicle");
         btnAdd.setOnAction(e -> {
             try {
-                if (cmbBranch.getValue() == null) {
-                    showAlert("Validation Error", "Please select a Branch.");
+                if (cmbBranch.getValue() == null || cmbType.getValue() == null) {
+                    showAlert("Validation Error", "Select a branch and a vehicle type.");
                     return;
                 }
-
-                ComboBox<String> cmbStatus = new ComboBox<>();
-                cmbStatus.getItems().addAll("Available", "InUse", "Maintenance");
-                cmbStatus.setValue("Available");
-
+                if (txtPlate.getText().isBlank() || txtBrand.getText().isBlank() || txtModel.getText().isBlank()) {
+                    showAlert("Validation Error", "Plate, brand and model are required.");
+                    return;
+                }
                 Vehicle v = new Vehicle(
-                        txtPlate.getText(),
-                        txtModel.getText(),
-                        txtBrand.getText(),
+                        txtPlate.getText().trim(),
+                        txtModel.getText().trim(),
+                        txtBrand.getText().trim(),
                         cmbType.getValue(),
                         Integer.parseInt(txtSeats.getText()),
-                        txtStatus.getText().isEmpty() ? "Available" : txtStatus.getText(),
-                        Integer.parseInt(txtMileage.getText()),
+                        cmbStatus.getValue(),
+                        txtMileage.getText().isBlank() ? 0 : Integer.parseInt(txtMileage.getText()),
                         cmbBranch.getValue().getId());
                 vehicleDAO.addVehicle(v);
                 refreshTable();
-                // Clear form fields manually
                 txtPlate.clear();
                 txtModel.clear();
                 txtBrand.clear();
-                txtStatus.clear();
-                txtMileage.clear();
                 txtSeats.clear();
+                txtMileage.setText("0");
                 cmbType.getSelectionModel().clearSelection();
             } catch (SQLException ex) {
                 showAlert("Error", "Database Error: " + ex.getMessage());
             } catch (NumberFormatException ex) {
-                showAlert("Error", "Mileage must be a number.");
-            } catch (Exception ex) {
-                showAlert("Error", "Invalid Input: " + ex.getMessage());
+                showAlert("Error", "Seats are required and must be a number.");
             }
         });
 
@@ -131,9 +145,20 @@ public class VehicleView {
             }
         });
 
-        HBox form = new HBox(10, txtPlate, txtBrand, txtModel, cmbType, txtStatus, txtMileage, btnAdd);
+        FlowPane form = Forms.row(
+                Forms.field("License plate *", txtPlate, 140),
+                Forms.field("Brand *", txtBrand, 130),
+                Forms.field("Model *", txtModel, 130),
+                Forms.field("Type *", cmbType, 130),
+                Forms.field("Seats * (must match the type)", txtSeats, 180));
+        FlowPane form2 = Forms.row(
+                Forms.field("Status", cmbStatus, 140),
+                Forms.field("Mileage (km)", txtMileage, 120),
+                Forms.field("Branch *", cmbBranch, 190),
+                Forms.action(btnAdd),
+                Forms.action(btnDelete));
 
-        layout.getChildren().addAll(title, table, form, btnDelete);
+        layout.getChildren().addAll(title, table, form, form2);
         return layout;
     }
 

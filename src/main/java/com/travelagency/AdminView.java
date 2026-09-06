@@ -101,8 +101,12 @@ public class AdminView {
             }
         });
 
-        HBox input = new HBox(10, new Label("Branch:"), cmbBranch, btnCalc);
-        box.getChildren().addAll(input, txtResult);
+        HBox input = new HBox(12,
+                Forms.field("Branch", cmbBranch, 200),
+                Forms.action(btnCalc));
+        Label resultLabel = new Label("Result of sp_branch_financials");
+        resultLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555;");
+        box.getChildren().addAll(input, resultLabel, txtResult);
         return box;
     }
 

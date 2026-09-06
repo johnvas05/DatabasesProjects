@@ -97,8 +97,7 @@ public class Main extends Application {
 
         try {
             if (DatabaseConnection.getConnection() != null) {
-                SchemaManager.ensureSchema(DatabaseConnection.getConnection());
-                statusLabel.setText("Status: Connected to Database (Schema Verified)");
+                statusLabel.setText("Status: Connected as " + DatabaseConnection.describe());
                 statusLabel.setStyle("-fx-text-fill: green;");
             }
         } catch (SQLException e) {
@@ -110,8 +109,11 @@ public class Main extends Application {
         statusBar.getChildren().add(statusLabel);
         mainLayout.setBottom(statusBar);
 
-        Scene scene = new Scene(mainLayout, 800, 600);
+        // wide enough for the labelled forms of the Trips and Staff screens
+        Scene scene = new Scene(mainLayout, 1180, 740);
         stage.setScene(scene);
+        stage.setMinWidth(900);
+        stage.setMinHeight(600);
         stage.show();
     }
 }

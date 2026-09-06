@@ -3,13 +3,16 @@ package com.travelagency;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.scene.Scene;
 
 import java.sql.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 public class TripView {
@@ -82,12 +85,20 @@ public class TripView {
         Label lblInfo = new Label("Add Trip");
         lblInfo.setStyle("-fx-font-weight: bold;");
 
-        String now = LocalDateTime.now().withNano(0).toString().replace("T", " ") + ":00";
-        TextField txtDep = new TextField(now);
-        txtDep.setPromptText("Departure (YYYY-MM-DD HH:MM:SS)");
-
-        TextField txtRet = new TextField(now);
-        txtRet.setPromptText("Return (YYYY-MM-DD HH:MM:SS)");
+        // Dates are picked, not typed (3.2.2): date picker + hour list
+        DatePicker dpDep = new DatePicker(LocalDate.now().plusDays(7));
+        dpDep.setPromptText("Departure date");
+        ComboBox<String> cmbDepTime = new ComboBox<>();
+        DatePicker dpRet = new DatePicker(LocalDate.now().plusDays(12));
+        dpRet.setPromptText("Return date");
+        ComboBox<String> cmbRetTime = new ComboBox<>();
+        for (int h = 0; h < 24; h++) {
+            String hh = String.format("%02d:00", h);
+            cmbDepTime.getItems().add(hh);
+            cmbRetTime.getItems().add(hh);
+        }
+        cmbDepTime.setValue("08:00");
+        cmbRetTime.setValue("20:00");
 
         ComboBox<String> cmbStatus = new ComboBox<>();
         cmbStatus.getItems().addAll("PLANNED", "CANCELLED", "CONFIRMED", "COMPLETED", "ACTIVE");
@@ -104,12 +115,22 @@ public class TripView {
         cmbBranch.setPromptText("Select Branch");
         ComboBox<Vehicle> cmbVehicle = new ComboBox<>();
         cmbVehicle.setPromptText("Select Vehicle");
+        // Driver and guide come from the database as well (3.2.2). The driver is
+        // required: sp_assign_vehicle_to_trip refuses a vehicle with more than 9
+        // seats unless the driver holds a C or D licence.
+        ComboBox<String> cmbDriver = new ComboBox<>();
+        cmbDriver.setPromptText("Select Driver");
+        ComboBox<String> cmbGuide = new ComboBox<>();
+        cmbGuide.setPromptText("Select Guide");
 
         try {
             cmbBranch.getItems().addAll(branchDAO.getAllBranches());
             // Smart Vehicle Selection: Load only available vehicles with 40+ seats by
             // default
             cmbVehicle.getItems().addAll(vehicleDAO.getAvailableVehicles(40));
+            WorkerDAO workerDAO = new WorkerDAO();
+            cmbDriver.getItems().addAll(workerDAO.getDriverOptions());
+            cmbGuide.getItems().addAll(workerDAO.getGuideOptions());
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -143,35 +164,67 @@ public class TripView {
                     showAlert("Validation Error", "Please select a Branch and a Vehicle.");
                     return;
                 }
+                if (cmbDriver.getValue() == null) {
+                    showAlert("Validation Error",
+                            "Please select a Driver: the vehicle can only be assigned to a trip that has one.");
+                    return;
+                }
+
+                if (dpDep.getValue() == null || dpRet.getValue() == null) {
+                    showAlert("Validation Error", "Pick a departure and a return date.");
+                    return;
+                }
+                Timestamp dep = Timestamp.valueOf(LocalDateTime.of(dpDep.getValue(), LocalTime.parse(cmbDepTime.getValue())));
+                Timestamp ret = Timestamp.valueOf(LocalDateTime.of(dpRet.getValue(), LocalTime.parse(cmbRetTime.getValue())));
+                if (!ret.after(dep)) {
+                    showAlert("Validation Error", "Return must be after departure.");
+                    return;
+                }
 
                 Trip t = new Trip(
-                        Timestamp.valueOf(txtDep.getText()),
-                        Timestamp.valueOf(txtRet.getText()),
+                        dep,
+                        ret,
                         Integer.parseInt(txtSeats.getText()),
                         Double.parseDouble(txtCost.getText()),
                         Double.parseDouble(txtCost.getText()) / 2, // Child cost default
                         cmbStatus.getValue(),
                         10, // Min participants
                         cmbBranch.getValue().getId(),
-                        cmbVehicle.getValue().getId(), // Uses selected Vehicle ID
-                        null, // Guide (null for now)
-                        null // Driver (null for now)
-                );
-                dao.addTrip(t);
-                refreshTable();
-
-                // Clear form
-                // clearForm(txtDep, txtRet, txtSeats, txtCost); // simplified clearing
+                        0, // vehicle is assigned below through sp_assign_vehicle_to_trip
+                        UniversalTableManager.optionKey(cmbGuide.getValue()),
+                        UniversalTableManager.optionKey(cmbDriver.getValue()));
+                int tripId = dao.addTrip(t);
+                Vehicle v = cmbVehicle.getValue();
+                try {
+                    // Requirement 3.1.3.1: the stored procedure runs all checks and sets the vehicle InUse
+                    String report = dao.assignVehicle(tripId, v.getId(), v.getMileage());
+                    refreshTable();
+                    showAlert("Trip " + tripId + " created", report);
+                } catch (SQLException ex) {
+                    refreshTable();
+                    showAlert("Trip " + tripId + " created without vehicle", ex.getMessage());
+                }
             } catch (SQLException ex) {
                 showAlert("Error", "Database Error: " + ex.getMessage());
             } catch (IllegalArgumentException ex) {
-                showAlert("Format Error",
-                        "Invalid Date/Time Format.\nRequired: YYYY-MM-DD HH:MM:SS\nExample: 2025-06-01 14:30:00");
+                showAlert("Format Error", "Max seats and cost must be numbers.");
             }
         });
 
-        HBox form = new HBox(10, txtDep, txtRet, cmbStatus, txtSeats, txtCost);
-        HBox form2 = new HBox(10, cmbBranch, cmbVehicle, btnAdd);
+        FlowPane form = Forms.row(
+                Forms.field("Departure date", dpDep),
+                Forms.field("Departure time", cmbDepTime, 100),
+                Forms.field("Return date", dpRet),
+                Forms.field("Return time", cmbRetTime, 100),
+                Forms.field("Status", cmbStatus, 130),
+                Forms.field("Max seats", txtSeats, 90),
+                Forms.field("Cost (adult) €", txtCost, 110));
+        FlowPane form2 = Forms.row(
+                Forms.field("Branch", cmbBranch, 190),
+                Forms.field("Driver (licence decides the vehicle)", cmbDriver, 260),
+                Forms.field("Guide", cmbGuide, 220),
+                Forms.field("Vehicle (available, enough seats)", cmbVehicle, 240),
+                Forms.action(btnAdd));
 
         Button btnDetails = new Button("Show Trip Details (Bonus 3.2.3)");
         btnDetails.setStyle("-fx-background-color: #e6e6fa;");
@@ -184,7 +237,7 @@ public class TripView {
             }
         });
 
-        Button btnAutoBook = new Button("Auto-Book Accommodations 🏨");
+        Button btnAutoBook = new Button("Auto-Book Accommodations ");
         btnAutoBook.setStyle("-fx-background-color: #90ee90; -fx-font-weight: bold;");
         btnAutoBook.setOnAction(e -> {
             Trip selected = table.getSelectionModel().getSelectedItem();
@@ -258,57 +311,36 @@ public class TripView {
 
         StringBuilder staffInfo = new StringBuilder();
 
-        // Query Driver Info
-        if (trip.getDriverId() != null && !trip.getDriverId().isEmpty()) {
-            try (Connection conn = DatabaseConnection.getConnection()) {
-                String driverQuery = "SELECT w.wrk_name, w.wrk_lname, d.drv_license, d.drv_experience " +
-                        "FROM worker w JOIN driver d ON w.wrk_AT = d.drv_AT " +
-                        "WHERE d.drv_AT = ?";
-                PreparedStatement pstmt = conn.prepareStatement(driverQuery);
-                pstmt.setString(1, trip.getDriverId());
-                ResultSet rs = pstmt.executeQuery();
-
-                if (rs.next()) {
-                    staffInfo.append("🚗 DRIVER:\n");
-                    staffInfo.append("   Name: ").append(rs.getString("wrk_name")).append(" ")
-                            .append(rs.getString("wrk_lname")).append("\n");
-                    staffInfo.append("   License: ").append(rs.getString("drv_license")).append("\n");
-                    staffInfo.append("   Experience: ").append(rs.getInt("drv_experience")).append(" years\n");
-                } else {
-                    staffInfo.append("🚗 DRIVER: Not assigned\n");
-                }
-            } catch (SQLException ex) {
-                staffInfo.append("🚗 DRIVER: Error loading info\n");
+        // Driver of the trip
+        try {
+            TripDAO.StaffInfo driver = dao.getDriverInfo(trip.getDriverId());
+            if (driver != null) {
+                staffInfo.append("🚗 DRIVER:\n");
+                staffInfo.append("   Name: ").append(driver.name).append(" ").append(driver.lastName).append("\n");
+                staffInfo.append("   License: ").append(driver.licence).append("\n");
+                staffInfo.append("   Experience: ").append(driver.experience).append(" years\n");
+            } else {
+                staffInfo.append("🚗 DRIVER: Not assigned\n");
             }
-        } else {
-            staffInfo.append("🚗 DRIVER: Not assigned\n");
+        } catch (SQLException ex) {
+            staffInfo.append("🚗 DRIVER: Error loading info\n");
         }
 
         staffInfo.append("\n");
 
-        // Query Guide Info
-        if (trip.getGuideId() != null && !trip.getGuideId().isEmpty()) {
-            try (Connection conn = DatabaseConnection.getConnection()) {
-                String guideQuery = "SELECT w.wrk_name, w.wrk_lname, g.gui_languages " +
-                        "FROM worker w JOIN guide g ON w.wrk_AT = g.gui_AT " +
-                        "WHERE g.gui_AT = ?";
-                PreparedStatement pstmt = conn.prepareStatement(guideQuery);
-                pstmt.setString(1, trip.getGuideId());
-                ResultSet rs = pstmt.executeQuery();
-
-                if (rs.next()) {
-                    staffInfo.append("🗣️ GUIDE:\n");
-                    staffInfo.append("   Name: ").append(rs.getString("wrk_name")).append(" ")
-                            .append(rs.getString("wrk_lname")).append("\n");
-                    staffInfo.append("   Languages: ").append(rs.getString("gui_languages")).append("\n");
-                } else {
-                    staffInfo.append("🗣️ GUIDE: Not assigned\n");
-                }
-            } catch (SQLException ex) {
-                staffInfo.append("🗣️ GUIDE: Error loading info\n");
+        // Guide of the trip, with the languages they speak (languages table)
+        try {
+            TripDAO.StaffInfo guide = dao.getGuideInfo(trip.getGuideId());
+            if (guide != null) {
+                staffInfo.append("🗣️ GUIDE:\n");
+                staffInfo.append("   Name: ").append(guide.name).append(" ").append(guide.lastName).append("\n");
+                staffInfo.append("   Languages: ")
+                        .append(guide.languages.isEmpty() ? "-" : guide.languages).append("\n");
+            } else {
+                staffInfo.append("🗣️ GUIDE: Not assigned\n");
             }
-        } else {
-            staffInfo.append("🗣️ GUIDE: Not assigned\n");
+        } catch (SQLException ex) {
+            staffInfo.append("🗣️ GUIDE: Error loading info\n");
         }
 
         txtStaff.setText(staffInfo.toString());
@@ -323,27 +355,21 @@ public class TripView {
         txtAccom.setStyle("-fx-font-family: monospace; -fx-background-color: #fff3cd;");
 
         StringBuilder accomInfo = new StringBuilder();
-        try (Connection conn = DatabaseConnection.getConnection()) {
-            String accomQuery = "SELECT l.lg_name, l.lg_type, l.lg_stars, ru.ru_checkin, ru.ru_checkout, " +
-                    "ru.ru_rooms_count, ru.ru_total_cost " +
-                    "FROM room_usage ru JOIN lodging l ON ru.ru_lodging_id = l.lg_id " +
-                    "WHERE ru.ru_trip_id = ? ORDER BY ru.ru_checkin";
-            PreparedStatement pstmt = conn.prepareStatement(accomQuery);
-            pstmt.setInt(1, trip.getId());
-            ResultSet rs = pstmt.executeQuery();
-
-            if (!rs.isBeforeFirst()) {
+        try {
+            List<TripDAO.AccommodationInfo> booked = dao.getAccommodations(trip.getId());
+            if (booked.isEmpty()) {
                 accomInfo
                         .append("No accommodations booked yet.\nUse 'Auto-Book Hotels' feature to book automatically.");
             } else {
-                while (rs.next()) {
-                    accomInfo.append("🏨 ").append(rs.getString("lg_name"));
-                    accomInfo.append(" (").append(rs.getInt("lg_stars")).append("-star ")
-                            .append(rs.getString("lg_type")).append(")\n");
-                    accomInfo.append("   Check-in: ").append(rs.getDate("ru_checkin")).append("\n");
-                    accomInfo.append("   Check-out: ").append(rs.getDate("ru_checkout")).append("\n");
-                    accomInfo.append("   Rooms: ").append(rs.getInt("ru_rooms_count"))
-                            .append(" | Cost: $").append(String.format("%.2f", rs.getDouble("ru_total_cost")))
+                for (TripDAO.AccommodationInfo a : booked) {
+                    accomInfo.append("🏨 ").append(a.lodgingName);
+                    // only hotels and resorts have official stars (CHECK constraint)
+                    accomInfo.append(" (").append(a.stars == null ? "" : a.stars + "-star ")
+                            .append(a.type).append(")\n");
+                    accomInfo.append("   Check-in: ").append(a.checkIn).append("\n");
+                    accomInfo.append("   Check-out: ").append(a.checkOut).append("\n");
+                    accomInfo.append("   Rooms: ").append(a.rooms)
+                            .append(" | Cost: $").append(String.format("%.2f", a.cost))
                             .append("\n\n");
                 }
             }
