@@ -104,6 +104,27 @@ docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 baseisproject < queries/
 
 ## Tests
 
+### The database, as one SQL script
+
+```bash
+docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/Tests.sql
+```
+
+`queries/Tests.sql` runs 100 checks (schema, seed data, the business rules of
+section 2, every stored procedure of 3.1.3, every trigger of 3.1.4, the indexes
+of 3.1.3.4) and prints a PASS/FAIL table, the failures on their own and a
+summary. It needs no shell and no Java, so it can also just be opened in a SQL
+client and executed.
+
+**It changes nothing.** Everything runs inside one transaction that is rolled
+back before the report is printed, so it is safe on the live database, during a
+presentation, as often as you like; the last row of the output shows the data
+is untouched. (The report survives the rollback because it is kept in a MEMORY
+table, which is why the client prints a warning about a non-transactional
+table. That warning is expected.) It takes under a second.
+
+### The full suite
+
 With the container running:
 
 ```bash
@@ -159,6 +180,7 @@ in the demo state.
 | `CalculateReservationCost.sql`, `PROCEDURE.sql`, `TRIGGER.sql` | reservation pricing, branch financials, salary guard (used by the GUI) |
 | `Upgrade_2026-09.sql` | one-off upgrade of the January dump: real stay dates and `to_sequence`, `ru_nights`, covering indexes, lodging seed with postal codes, reservation prices, minimum participants, driver route/licence consistency, events for every trip, DBA usernames, CHECK constraints (vehicle type by seats, stars only for hotels/resorts), city/country destinations |
 
+| `Tests.sql` | the database test suite as one SQL script: 100 checks with a PASS/FAIL report, run inside a transaction that is rolled back, so it changes nothing |
 | `Reset.sql` | puts the database back into the demo state: the seed data of `Insertions.sql` (with reproducible birth dates), reservation prices, empty `room_usage` and `log_actions`, ids restarting at 1, `trip_history` kept |
 
 `baseisproject_dump.sql` is the complete database (schema, data, routines, triggers) after all of the above.

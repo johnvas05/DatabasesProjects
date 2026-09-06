@@ -43,6 +43,27 @@ If `mvn` is not on the PATH, the Maven bundled with IntelliJ works:
 
 ## 1. Part A - the database (3.1.x)
 
+### The whole database, checked in one script
+
+If you only get to show one thing, show this:
+
+```bash
+docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/Tests.sql
+```
+
+> 100 checks - schema, seed data, the business rules of section 2, every stored
+> procedure, every trigger, the indexes - and a table at the end:
+> `100 | 100 | 0 | ALL TESTS PASSED`.
+>
+> It runs in under a second **on the live database and changes nothing**: the
+> whole script is one transaction that is rolled back before the report is
+> printed. The last row of the output proves it (customers 20, reservations 24,
+> room_usage 0, vehicle 9 `Available/90000`). You can run it again straight
+> away. The warning about a non-transactional table is expected - it is the
+> MEMORY table that carries the report through the rollback.
+
+Then walk through the interesting checks by hand.
+
 Open a SQL client on the container:
 
 ```bash
@@ -244,11 +265,12 @@ enough seats. Dates use date pickers, numbers use numeric-only fields, ENUM
 columns become lists. The Universal Manager builds all of this from the schema
 at runtime.
 
-**"How do you know it works?"** - `tests/run_all.sh`: 146 checks on the
-database (every procedure, every trigger, the business rules of section 2, the
-indexes), 182 on the application (every screen and every button, including the
-three bonus features) and a check that every input on all 8 screens carries a
-label. The first two run on throw-away copies of the database.
+**"How do you know it works?"** - Two answers. `queries/Tests.sql` is 100
+checks on the database in plain SQL, runs on the live database in under a
+second and changes nothing. `tests/run_all.sh` is the full suite: 146 checks on
+the database, 182 on the application (every screen and every button, including
+the three bonus features) and a check that every input on all 8 screens carries
+a label. The shell suites run on throw-away copies of the database.
 
 **"What happens if two checks fail at once?"** -
 `CALL sp_assign_vehicle_to_trip(1, 4, 1)` -> the alert names both reasons:
