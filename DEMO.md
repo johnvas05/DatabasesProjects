@@ -311,12 +311,18 @@ or the child price of the trip from the customer's age.
 **Say:** a raise needs a profitable branch and at most 2 %. With our data every
 branch pays more in salaries than it takes in.
 
-To also show a raise **accepted**, run this in IntelliJ (lowering is always
-allowed), then reopen **Staff**:
+To also show a raise **accepted**, run this line on its own in an IntelliJ
+**Query Console** (lowering is always allowed), then reopen **Staff**:
 
 ```sql
 UPDATE worker SET wrk_salary = 100 WHERE wrk_br_code = 1;
 ```
+
+> Run it in a plain console, **not** inside the salary block of `Demo.sql`:
+> that block is an open transaction, so the GUI would not see the change and
+> would freeze for about 50 seconds waiting for the locked rows. The same rule
+> holds for every `Demo.sql` block that starts with `START TRANSACTION`:
+> finish it with its `ROLLBACK` before you touch the GUI again.
 
 `AT101` → `101` → *Salary updated successfully*. → `110` → **Trigger Denied** -
 *exceeds 2% limit*.
