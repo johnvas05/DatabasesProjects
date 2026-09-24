@@ -5,6 +5,10 @@ Tests.sql, then run the script again. Every file runs on its own, checks
 one part of the project inside a transaction that is rolled back, prints
 its own PASS/FAIL report and changes nothing.
 
+Each file starts from the seed data of the report, loaded inside its
+transaction, so it passes whatever was done in the GUI before - you can
+show a feature in the GUI and run its test right after.
+
 ```bash
 docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/tests/3.1.3.1_assign_vehicle.sql
 ```

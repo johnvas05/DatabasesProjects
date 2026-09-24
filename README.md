@@ -110,7 +110,7 @@ same from a shell.)
 | `queries/Demo.sql` | **Part A, question by question**, in the order of the assignment. Run it in the IDE one statement at a time: the records used, the case that works (`[OK]`), every case the database refuses (`[REFUSED]`, with the error to expect), and a one-sentence explanation per block. Each block is rolled back. |
 | `queries/tests/<question>.sql` | "Does it handle every case?" - the checks of one question, with a PASS/FAIL line per case. Runs on its own and changes nothing. |
 | `queries/Tests.sql` | all 154 checks at once, in under a second, changing nothing |
-| `DEMO.md` | the walkthrough of the whole presentation, Part A and the GUI of Part B |
+| `DEMO.md` | **the run-through**: every functionality, in the order of the assignment - how to show it in the GUI, what appears, and the SQL test to run right after |
 | `CHEATSHEET.md` | the quick reference to keep open: for every requirement, where the code is, how to prove it in SQL, how to show it in the GUI, how to make it fail on purpose |
 
 None of these need a shell script. On Windows PowerShell, where `<` does not
@@ -143,7 +143,9 @@ table. That warning is expected.) It takes under a second.
 `queries/tests/` holds the same checks split into one file per question
 (`3.1.3.1_assign_vehicle.sql`, `3.1.4.2_stay_nights_and_cost.sql`, ...), each
 complete on its own, so a single question can be proved without the rest; the
-index is `queries/tests/README.md`. The files are generated from `Tests.sql` by
+index is `queries/tests/README.md`. Like `Tests.sql`, each one loads the seed
+data of the report inside its transaction (procedure `t_fixture`, generated from
+the dump), so it passes whatever was done in the GUI before it. The files are generated from `Tests.sql` by
 `tests/split_sql_tests.sh` - edit `Tests.sql`, then run the script again
 (`tests/db_tests.sh` fails if they are out of date).
 

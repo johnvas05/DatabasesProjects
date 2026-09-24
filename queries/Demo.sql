@@ -20,6 +20,13 @@
 --  whole file can be shown again and again. If a block is left half way
 --  (or anything looks wrong), run queries/Reset.sql - it takes a second.
 --
+--  The numbers quoted below are those of the demo state. Blocks 3.1.1,
+--  3.1.2.3, 3.1.2.4 and 3.1.3.4 read data the GUI never changes, so they
+--  can be shown at any time. The other blocks show the numbers quoted only
+--  before the GUI has changed the same records (e.g. 3.1.3.2 before hotels
+--  are booked from the GUI). The test files in queries/tests/ do not have
+--  this limit: they load the seed data themselves.
+--
 --  MARKERS
 --    [OK]        the statement goes through - show the result
 --    [REFUSED]   the statement is refused by the database on purpose - the

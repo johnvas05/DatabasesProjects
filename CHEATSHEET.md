@@ -34,7 +34,9 @@ for the next question.
 
 **If they ask "does it handle every case?"** - run the test file of that
 question. Each file runs on its own, shows a PASS/FAIL line per case, and
-changes nothing:
+changes nothing. It loads the report's seed data inside its own transaction,
+so it passes **whatever you did in the GUI before** - show a feature in the
+GUI, then run its test straight after:
 
 ```bash
 docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/tests/3.1.3.1_assign_vehicle.sql
@@ -89,14 +91,18 @@ takes a second), or `docker compose down -v && docker compose up -d`.
 
 ## 3.1.3.1 - Assigning a vehicle (five checks)
 
-**GUI** — Trips → fill the form → **Add Trip**.
+**GUI** — Trips → dates **2 → 5 October 2026**, branch `Athens`, max seats `40`
+→ **Add Trip**. (Rehearsed; see `DEMO.md` for the full sequence.)
 
-| To show | Pick in the form | What appears |
-|---|---|---|
-| ✅ it works | Driver with **licence D**, the 50-seat bus | `Trip N created` + five checks, all **PASS** |
-| ❌ wrong licence | Driver with **licence B**, the 50-seat bus | `Trip N created without vehicle` — *driver licence B (C/D needed)* |
-| ❌ no driver | leave Driver empty | the form refuses: *"Please select a Driver"* |
-| ❌ vehicle busy | a bus already on an overlapping trip | *overlaps 1 other trip* |
+| To show | Driver | Vehicle | What appears |
+|---|---|---|---|
+| ❌ wrong licence | `AT114` (licence **B**) | `Man Lion (IFF-6001)` - bus 9 | `Trip N created without vehicle` — *driver licence B (C/D needed)* |
+| ❌ vehicle busy | `AT113` (licence D) | `Mercedes Tourismo (IAA-1001)` - bus 1, on trip 11 from 1 to 10 October | *overlaps 1 other trip(s)* |
+| ✅ it works | `AT113` (licence **D**) | `Man Lion (IFF-6001)` - bus 9 | `Trip N created` + five checks, all **PASS** |
+| ❌ no driver | leave Driver empty | any | the form refuses: *"Please select a Driver"* |
+
+> Do not use bus 1 (`IAA-1001`) for the success case on October dates: it is
+> already on trip 11, so the procedure (correctly) refuses it.
 
 **SQL**
 

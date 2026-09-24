@@ -379,6 +379,46 @@ check "every [REFUSED] step is refused with the announced message, nothing else 
 check "the presentation script leaves the database unchanged" \
     "$([[ "$(q "$demo_snapshot")" == "$demo_before" ]] && echo unchanged || echo CHANGED)" "unchanged"
 
+# ---------------------------------------------------------------- SQL tests after a GUI demo
+# In the exam a feature is shown in the GUI and its SQL test is run right
+# after. The GUI changes the data the tests rely on (a new trip takes bus 9,
+# hotels get booked, salaries change), so every SQL test loads the seed rows
+# inside its own transaction (t_fixture). Mess the database up the way a GUI
+# demo does, then every test must still pass and leave the mess exactly as
+# it was.
+section "the SQL tests after a GUI demo has changed the data"
+q "INSERT INTO trip (tr_departure, tr_return, tr_maxseats, tr_cost_adult, tr_cost_child, tr_status,
+                     tr_min_participants, tr_br_code, tr_gui_AT, tr_drv_AT)
+   VALUES ('2026-10-01 05:00', '2026-10-06 17:00', 40, 500, 250, 'PLANNED', 10, 1, 'AT119', 'AT113');
+   SET @gui_trip = LAST_INSERT_ID();
+   CALL sp_assign_vehicle_to_trip(@gui_trip, 9, 90000);
+   CALL sp_book_trip_accommodation(1);
+   INSERT INTO customer (cust_name, cust_lname, cust_birth_date) VALUES ('Gui', 'Demo', '2000-01-01');
+   UPDATE worker SET wrk_salary = 100 WHERE wrk_br_code = 1;
+   UPDATE vehicle SET v_status = 'Maintenance' WHERE v_id = 1;
+   INSERT INTO reservation (res_tr_id, res_seatnum, res_cust_id, res_status, res_total_cost)
+   VALUES (1, 4, 5, 'CONFIRMED', 500);" > /dev/null
+check "the GUI demo took bus 9 and booked hotels" \
+    "$(q "SELECT CONCAT((SELECT v_status FROM vehicle WHERE v_id = 9), '/', (SELECT COUNT(*) > 0 FROM room_usage))")" "InUse/1"
+gui_snapshot="SELECT MD5(CONCAT_WS('|',
+    (SELECT GROUP_CONCAT(CONCAT_WS(',', tr_id, tr_status, IFNULL(tr_vehicle_id, '-'), tr_km) ORDER BY tr_id) FROM trip),
+    (SELECT GROUP_CONCAT(CONCAT_WS(',', v_id, v_status, v_mileage, v_seats) ORDER BY v_id) FROM vehicle),
+    (SELECT GROUP_CONCAT(CONCAT_WS(',', ru_trip_id, ru_lodging_id, ru_rooms_count, ru_total_cost) ORDER BY ru_trip_id, ru_lodging_id) FROM room_usage),
+    (SELECT GROUP_CONCAT(CONCAT_WS(',', res_tr_id, res_seatnum, res_status, res_total_cost) ORDER BY res_tr_id, res_seatnum) FROM reservation),
+    (SELECT SUM(wrk_salary) FROM worker), (SELECT COUNT(*) FROM customer),
+    (SELECT COUNT(*) FROM log_actions), (SELECT MAX(log_id) FROM log_actions)))"
+gui_before=$(q "$gui_snapshot")
+check "queries/Tests.sql still passes" \
+    "$(docker exec -i "$CONTAINER" mariadb -uroot -p"$DB_PASSWORD" -N -B "$TDB" < queries/Tests.sql 2>&1)" \
+    "ALL TESTS PASSED"
+for f in queries/tests/*.sql; do
+    check "$(basename "$f") still passes" \
+        "$(docker exec -i "$CONTAINER" mariadb -uroot -p"$DB_PASSWORD" -N -B "$TDB" < "$f" 2>&1)" \
+        "ALL TESTS PASSED"
+done
+check "and the data the GUI demo left behind is exactly as it was" \
+    "$([[ "$(q "$gui_snapshot")" == "$gui_before" ]] && echo unchanged || echo CHANGED)" "unchanged"
+
 # ---------------------------------------------------------------- done
 docker exec -i "$CONTAINER" mariadb -uroot -p"$DB_PASSWORD" -e "DROP DATABASE IF EXISTS $TDB;"
 echo

@@ -1,15 +1,17 @@
-# Demo script for the presentation
+# Run-through for the exam
 
-Everything below starts from the same state, so the numbers in this file are
-the numbers on the screen. Reset, then follow the steps in order.
+The exam follows the assignment: every question of Part A one by one, then the
+functionality of Part B. For each functionality below you **show it in the
+GUI**, then **run its SQL test** to prove every case works, including the ones
+the database refuses.
 
-> Keep **`CHEATSHEET.md`** open beside this: it answers "show me X" for any
-> requirement, in SQL and in the GUI, including how to make each rule fail
-> on purpose.
+Every step has been rehearsed against the database; the messages and numbers
+here are the ones on the screen. Keep [`CHEATSHEET.md`](CHEATSHEET.md) open for
+questions outside this script.
 
 ---
 
-## 0. Before you start (no shell scripts needed)
+## Before the exam
 
 On the computer of whoever shares the screen:
 
@@ -18,224 +20,341 @@ docker compose down -v
 docker compose up -d
 ```
 
-This installs the database **already in the demo state**: the seed data of the
-report, every reservation priced, no hotel bookings, an empty audit log, and the
-90 000 history rows. There is no reset step. Wait until the container reports
-`healthy` (about 10 seconds). `down -v` throws away whatever was in the database
-before, which is the point.
-
-Connect the IDE (IntelliJ / DataGrip) to `localhost:3307`, user `root`,
-password `john2005`, database `baseisproject`, and open `queries/Demo.sql`.
-
-If the data gets into a strange state during a rehearsal, open
-`queries/Reset.sql` in the IDE and run the whole file (one second).
-
-Then start the application:
-
-```bash
-mvn javafx:run
-```
-
-If `mvn` is not on the PATH, the Maven bundled with IntelliJ works:
-`"/Applications/IntelliJ IDEA.app/Contents/plugins/maven-plugin/lib/maven3/bin/mvn" javafx:run`
-
----
-
-## 1. Part A - the database (3.1.x), question by question
-
-The examiner follows the assignment, so `queries/Demo.sql` does too. It has one
-block per question, in this order:
-
-| Block | What you show |
-|---|---|
-| 3.1.1 | the row count of every table against its minimum |
-| 3.1.2.1 | the vehicles; a car with 30 seats and a bus with 8 refused (CHECK) |
-| 3.1.2.2 | the lodgings, Paris → France, the stays of trip 1 with their dates; a hotel "in France" refused (trigger), a hostel with stars refused (CHECK) |
-| 3.1.2.3 | the 90 000 history rows |
-| 3.1.2.4 | the DBA accounts and the structure of the log |
-| 3.1.3.1 | vehicle 9 assigned to trip 14 (all five checks PASS), then **each check failing on its own**: InUse, Maintenance, too few seats, licence B on a bus, licence B fine on a van, date overlap, lower mileage, two at once, trip/vehicle not found |
-| 3.1.3.2 | the search; free rooms shrinking after a booking; nothing found; the order (price, stars, rating); an inactive hotel left out |
-| 3.1.3.3 | trip 1 booked (1000 + 300 = 1300), booked again (still 2), 2 rooms for 3 passengers; all-or-nothing when London is full; no confirmed passengers; unknown trip |
-| 3.1.3.4 | both reports, EXPLAIN with the index ("Using index") and without it (full scan), and the time of each |
-| 3.1.4.1 | changes to a customer, a vehicle and a reservation appear in the log with their details; an account that is not a DBA cannot change anything |
-| 3.1.4.2 | 3 nights and 1080.00 computed by the trigger; a stay of 0 nights and one that ends before it starts refused |
-| 3.1.4.3 | bus 9 back to Available with 350 km added; no double count; another status leaves the vehicle alone |
-| Part B support | the reservation price (500 adult, 300 child), branch financials, the salary guard (refused, +1 %, +2 %, refused above 2 %) |
-
-**How to run it:** put the cursor on a statement and press Ctrl+Enter
-(Cmd+Enter on a Mac), one statement at a time. Do not run the whole file at
-once: the statements marked `[REFUSED]` fail on purpose, and the error is what
-you are showing. Each `-- Say:` line is one sentence you can use to explain the
-block. Every block ends with `ROLLBACK`, so the database is back in the demo
-state for the next question.
-
-**If you are asked "does it handle every case?"**, run the test file of that
-question. It checks every case and prints one PASS/FAIL line for each:
-
-```bash
-docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/tests/3.1.3.1_assign_vehicle.sql
-```
-
-Or all 154 checks at once:
+This gives a fresh database **already in the demo state**. Wait ~10 seconds,
+then check it once:
 
 ```bash
 docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/Tests.sql
 ```
 
-> `154 | 154 | 0 | ALL TESTS PASSED`, in under a second, on the live database,
-> and nothing changes: the last row of the output shows it (customers 20,
-> reservations 24, room_usage 0, vehicle 9 `Available/90000`). The warning
-> about a non-transactional table at the end is expected.
->
-> **On Windows PowerShell**, `<` does not work. Use
-> `Get-Content queries\Tests.sql -Raw | docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject`
-> instead. In `cmd.exe` the `<` form works as it is.
+> The last tables must say `154 | 154 | 0 | ALL TESTS PASSED`.
+
+Open three things side by side:
+
+1. **The GUI** - `mvn javafx:run` (or run `Launcher` in IntelliJ).
+2. **A terminal in the project folder** - for the SQL tests.
+3. **IntelliJ** - to show the code when you are asked, and `queries/Demo.sql`.
+
+### How to run an SQL test
+
+Every test is one file in `queries/tests/`, and every one is run the same way:
+
+```bash
+docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/tests/3.1.3.1_assign_vehicle.sql
+```
+
+On **Windows PowerShell** (where `<` does not work):
+
+```powershell
+Get-Content queries\tests\3.1.3.1_assign_vehicle.sql -Raw | docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject
+```
+
+What you get: first the output of the procedures themselves, then **one line
+per case with PASS or FAIL**, then a summary like `18 | 18 | 0 | ALL TESTS PASSED`.
+Scroll to the list of cases and read two or three of them out.
+
+What to say about it:
+
+> "Each test checks every outcome of the procedure or trigger - the case that
+> works and every case it must refuse. It loads the report's seed data inside a
+> transaction, so it doesn't matter what we just did in the GUI, and it rolls
+> everything back, so it changes nothing."
+
+**The tests do not depend on the GUI.** You can show something in the GUI and
+run its test right after, in any order, as many times as you like.
 
 ---
 
-## 2. Part B - the application (3.2.x)
+## Part A
 
-### Customers
+### 3.1.1 - The data  *(1 min)*
 
-1. Fill in the form at the bottom: first name, last name, email, phone, and a
-   **birth date** (the date picker - the age decides adult or child pricing).
-2. **Add Customer** -> the row appears in the table.
+**GUI** - click **Customers** (20 rows), **Trips** (14), **Staff** (26).
 
-### Vehicles
+**Say:** every table holds at least twice the minimum of the assignment,
+because we are two.
 
-1. **Add Vehicle**: plate, brand, model, type `Van`, seats `8`, branch -> added.
-   Notice the seats hint changes with the type (`Bus` -> "> 20", `Van` -> "6-9").
-2. Show a rule being enforced: type `Car`, seats `30` -> **Add Vehicle**.
-   > Error alert: `chk_vehicle_type_seats` - the database refuses it.
-3. Select the vehicle you added -> **Delete Selected**.
-
-### Lodgings
-
-1. The destination list offers **cities only** - `France` is not in it
-   (a lodging belongs to a city, 3.1.2.2).
-2. Pick type `Hostel` -> the **Stars** list is greyed out.
-   Pick `Hotel` -> it becomes selectable (stars are only for hotels and resorts).
-3. Add one, then **Delete Selected**.
-
-### Trips - the main screen
-
-**Bonus 1: smart vehicle selection**
-
-1. The **Max Seats** field starts at `40`; the vehicle list holds the 3 buses
-   with 50, 52 and 60 seats, smallest first.
-2. Type `60` -> only the 60-seat bus is left.
-3. Type `5` -> 9 vehicles.
-4. Type `999` -> "No available vehicles with 999+ seats".
-
-> Vehicles in maintenance never appear: the list is `Available` only.
-
-**Adding a trip (3.1.3.1 from the GUI)**
-
-1. Max Seats back to `40`, pick the dates, a **Branch**, a **Driver with
-   licence D**, a **Guide** and the 50-seat bus.
-2. **Add Trip**.
-   > `Trip N created` with the five checks of the procedure, all PASS.
-3. Try it again with a driver whose licence is **B**.
-   > `Trip N created without vehicle` - "driver licence B (C/D needed)".
-   > The trip is created, the vehicle is not attached: the procedure refused it.
-
-**Bonus 2: trip details**
-
-1. Select trip **1** in the table -> **Show Trip Details**.
-   > Driver (Takis Volanis, licence D, 10 years), guide (Zoi Laskari, French),
-   > the accommodations, and the passenger list with the seats.
-
-**Bonus 3: auto-booking hotels**
-
-1. Still on trip **1** -> **Auto-Book Accommodations 🏨** -> confirm.
-   > "Automatically booked 2 accommodation(s) for this trip."
-2. **Show Trip Details** again.
-   > Le Grand Paris, 2026-06-01 to 2026-06-05, 1 room, $1000.00
-   > London Stay, 2026-06-05 to 2026-06-10, 1 room, $300.00
-3. Press the button a second time -> still 2 bookings, not 4 (it replaces them).
-
-### Reservations
-
-1. Pick customer **C1 Lname1** (an adult), trip **Trip ID: 1**, a free seat
-   (seats 1-3 are taken, so the list starts at 4), status `PENDING`
-   -> **Book Reservation**.
-   > Cost **500.00** - the adult price of the trip.
-2. Now pick **C16 Lname16** (a child), the same trip, the next free seat.
-   > Cost **300.00** - the child price. The price is not typed in anywhere;
-   > `sp_calculate_reservation_cost` computes it from the birth date.
-
-### Staff
-
-1. Category `DRIVER` -> the licence, route and experience fields appear.
-   Fill in an ID (e.g. `AT901`), name, salary, branch -> **Add Worker**.
-   The worker row and the driver row are written in one transaction.
-2. Category `GUIDE` -> CV and language. Category `ADMIN` -> type and diploma.
-   > Every worker belongs to exactly one category (section 2.3).
-3. Select a worker -> **Update Salary** -> raise it a lot.
-   > `Trigger Denied: branch is not profitable` - the trigger checks the branch
-   > through `sp_branch_financials` before allowing any raise.
-
-   To also show the **accepted** path, make a branch profitable first (in the
-   SQL client), then come back:
-
-   ```sql
-   UPDATE worker SET wrk_salary = 100 WHERE wrk_br_code = 1;  -- lowering is always allowed
-   ```
-
-   Now select worker **AT101** and set the salary to `101` (a 1% raise)
-   -> accepted. Set it to `110` (a 10% raise) -> `exceeds 2% limit`.
-
-### Admin & Logs
-
-1. **System Logs** -> **Refresh Logs**.
-   > Every action of this demo, newest first, with the DBA account and the time.
-   > The log started empty because of the reset, so this is only your demo.
-2. **Branch Financials** -> pick a branch -> **Calculate Financials**.
-   > Revenue, expenses and profit ratio, straight from `sp_branch_financials` -
-   > the same procedure the salary trigger uses.
-
-### Universal Manager (3.2.2)
-
-1. Pick any table, e.g. `travel_to`.
-2. **Insert** -> the dialog is built from the schema:
-   - `to_tr_id` and `to_dst_id` are **drop-downs of the existing rows**
-     (foreign keys), not free text
-   - `to_arrival` / `to_departure` get **date pickers**
-   - ENUM columns become lists, flags become check boxes
-   - the generated key is not asked for
-3. Show that the rules still hold: pick `vehicle`, insert a `Car` with 30 seats
-   -> the same `chk_vehicle_type_seats` error as in the Vehicles screen.
+**Test** - `3.1.1_seed_data.sql` → **15 / 15**
 
 ---
 
-## 3. If something goes wrong
+### 3.1.2.1 - Vehicles  *(1 min)*
+
+**GUI** - **Vehicles**:
+
+1. Add a vehicle: plate `DEMO-1`, brand `Ford`, model `Transit`, type `Van`,
+   seats `8`, branch `Athens` → **Add Vehicle** → it appears in the table.
+2. The form clears itself. Fill it again with plate `DEMO-2`, brand `Toyota`,
+   model `Yaris`, type **`Car`**, seats **`30`** → **Add Vehicle**.
+   > Error: `CONSTRAINT chk_vehicle_type_seats failed` - the database refuses a
+   > car with 30 seats.
+3. Select `DEMO-1` → **Delete Selected**.
+
+**Say:** the seats must match the type (bus > 20, mini-bus 10-20, van 6-9,
+car up to 5). The rule is a CHECK constraint in the database, so no screen can
+get around it.
+
+**Test** - `rules_section2_check_constraints.sql` → **18 / 18**
+(every vehicle type accepted, each wrong combination refused, on INSERT and UPDATE)
+
+---
+
+### 3.1.2.2 - Lodging and stays  *(1 min)*
+
+**GUI** - **Lodgings**:
+
+1. Open the **Destination** list: only cities. `France` is not there - Paris
+   belongs to France, and a lodging belongs to a city.
+2. Pick type `Hostel`: the **Stars** list greys out. Pick `Hotel`: it turns on.
+
+Then **Universal Manager** → table `travel_to`: each stay of a trip has its own
+dates and its place in the order of the trip (`to_sequence`).
+
+**Test** - `3.1.2.2_lodging_in_a_city.sql` → **4 / 4**
+(a lodging in a city accepted, in a country refused - on INSERT and on UPDATE)
+
+---
+
+### 3.1.2.3 and 3.1.2.4 - History, DBAs and the log  *(1 min)*
+
+**GUI** - **Universal Manager** → table `dba_users`: the registered DBA accounts.
+**Admin & Logs → System Logs**: the audit log (it already holds the actions of
+this demo).
+
+**SQL** - in IntelliJ, `queries/Demo.sql`, block **3.1.2.3**: the 90 000 trips of
+the history. (Not in the GUI: the table view would load 90 000 rows.)
+
+**Test** - `3.1.2_new_tables.sql` → **12 / 12**
+(the new tables, their rows, the new columns, all 26 triggers and 8 procedures)
+
+---
+
+### 3.1.3.1 - Assigning a vehicle to a trip  *(3 min - the most important one)*
+
+**GUI** - **Trips**. Fill the form the same way three times, changing only the
+driver and the vehicle:
+
+- **Departure date** `2 October 2026`, **Return date** `5 October 2026`
+  (keep the times)
+- **Branch** `Athens (Panepistimiou 56)`, **Guide** any, **Max seats** `40`
+
+| # | Driver | Vehicle | What appears |
+|---|---|---|---|
+| 1 | `AT114 \| Akis Petretzikis (licence B, LOCAL)` | `Man Lion (IFF-6001)` | **Trip … created without vehicle** - *driver licence B (C/D needed)* |
+| 2 | `AT113 \| Lakis Lazopoulos (licence D, ABROAD)` | `Mercedes Tourismo (IAA-1001)` | **Trip … created without vehicle** - *overlaps 1 other trip(s)* |
+| 3 | `AT113 \| Lakis Lazopoulos (licence D, ABROAD)` | `Man Lion (IFF-6001)` | **Trip … created** - the five checks, all **PASS**, then *Success* |
+
+**Say:** the button calls `sp_assign_vehicle_to_trip`, which runs five checks:
+the vehicle is available, it has seats for the confirmed passengers, a vehicle
+of more than 9 seats needs a C or D licence, it is not on another trip on those
+dates (bus 1 is on trip 11, 1-10 October), and the odometer does not go
+backwards. Only if all five pass is the vehicle assigned and set to InUse.
+
+Point at the **Vehicles** screen: bus `IFF-6001` is now **InUse**.
+
+**Test** - `3.1.3.1_assign_vehicle.sql` → **18 / 18**
+(each of the five checks failing on its own, the cases where they pass, two
+failing at once, the successful assignment and what it writes)
+
+---
+
+### 3.1.3.2 - Searching for accommodation  *(1 min)*
+
+There is no button of its own: auto-booking (next) calls it for every stay.
+
+**Test** - `3.1.3.2_search_accommodation.sql` → **8 / 8**
+(found; free rooms reduced by other bookings; not enough rooms; an inactive
+lodging; a destination with none; cheapest first, then stars)
+
+The output also shows the hotel list the procedure returns. For a slower
+walk-through, `queries/Demo.sql` block **3.1.3.2**, one statement at a time.
+
+---
+
+### 3.1.3.3 - Booking a whole trip  *(2 min - also bonus 3)*
+
+**GUI** - **Trips**:
+
+1. Select the **trip you created in step 3** of 3.1.3.1. The three new trips
+   depart on 2 October, so they sit just above trip 11; the one from step 3 has
+   the **highest ID** of the three. → **Auto-Book Accommodations** → OK.
+   > **Booking Failed** - *no confirmed or paid reservations for this trip,
+   > nothing to book.*
+2. Select **trip 1** → **Auto-Book Accommodations** → OK.
+   > *Automatically booked 2 accommodation(s) for this trip.*
+3. **Show Trip Details**:
+   > Le Grand Paris (5-star Hotel), 2026-06-01 → 2026-06-05, 1 room, **$1000.00**
+   > London Stay (Hostel), 2026-06-05 → 2026-06-10, 1 room, **$300.00**
+4. Press **Auto-Book** again → still 2 bookings, not 4.
+
+**Say:** for every stay of the trip, in order, it books the best lodging that
+3.1.3.2 finds, for the dates of that stay - one room per two confirmed
+passengers. If one stay cannot be booked, every booking of the trip is
+cancelled: all or nothing.
+
+**Test** - `3.1.3.3_book_whole_trip.sql` → **13 / 13**
+(including the all-or-nothing case: London full, so the Paris booking is
+cancelled too)
+
+---
+
+### 3.1.3.4 - Queries on the history, and the indexes  *(2 min)*
+
+Not in the GUI. In IntelliJ, `queries/Demo.sql`, block **3.1.3.4**, one
+statement at a time:
+
+1. `SHOW INDEX FROM trip_history` - the two covering indexes.
+2. `CALL sp_history_revenue(...)` - the revenue of 2021.
+3. `EXPLAIN` **with** the index → `key idx_hist_dep_rev`, Extra **`Using index`**.
+4. `EXPLAIN` **without** it (`IGNORE INDEX`) → type **`ALL`**, the whole table.
+5. `SHOW PROFILES` → about **8 ms without, 2 ms with** the index.
+
+**Say:** the column in the WHERE comes first and the column in the SELECT
+second, so the answer comes from the index alone, without reading the table.
+
+**Test** - `3.1.3.4_history_and_indexes.sql` → **6 / 6**
+
+---
+
+### 3.1.4.1 - The audit log  *(1 min)*
+
+**GUI** - **Admin & Logs → System Logs → Refresh Logs**: every change of this
+demo - the trips you created, the vehicle set to InUse, the hotel bookings -
+with the account and the time, newest first.
+
+**Say:** 21 triggers - insert, update and delete on seven tables. The account
+must be a registered DBA (a foreign key to `dba_users`), so nobody can change
+the data without leaving a trace.
+
+**Test** - `3.1.4.1_audit_log.sql` → **15 / 15**
+(each of the seven tables logs all three actions; an account that is not a DBA
+cannot change anything)
+
+---
+
+### 3.1.4.2 - Nights and cost of a stay  *(1 min)*
+
+**GUI** - **Universal Manager** → table `room_usage`: the two bookings of trip 1.
+`ru_nights` (4 and 5) and `ru_total_cost` (1000.00 and 300.00) were never
+typed in - the trigger computed them when the booking was made.
+
+**Test** - `3.1.4.2_stay_nights_and_cost.sql` → **5 / 5**
+(computed for 1 and for 3 rooms; a stay of 0 nights and one that ends before it
+starts refused)
+
+---
+
+### 3.1.4.3 - Completing a trip frees its vehicle  *(1 min)*
+
+**GUI** - **Universal Manager** → table `trip` → select the trip you created in
+step 3 of 3.1.3.1 (the row with `tr_vehicle_id` = 9 and the highest `tr_id`) →
+**Update Row** → set `tr_status` to `COMPLETED` and `tr_km` to `350` → **Update**.
+
+Then **Vehicles**: bus `IFF-6001` is **Available** again and its mileage went
+from 90 000 to **90 350**.
+
+**Say:** the trigger fires only on the change *into* COMPLETED: another status
+leaves the vehicle alone, and the kilometres are never added twice.
+
+**Test** - `3.1.4.3_trip_completion.sql` → **5 / 5**
+
+---
+
+## Part B
+
+### 3.2.1 - Any table, any row  *(1 min)*
+
+**GUI** - **Universal Manager**: pick a table, **Insert / Update / Delete Row**.
+Insert into `travel_to` to show the dialog: `to_tr_id` and `to_dst_id` are
+**drop-downs of the existing rows**, the dates have **date pickers**, the
+generated key is not asked for. Cancel.
+
+### 3.2.2 - Restricted input  *(1 min)*
+
+Point it out on the forms you have already used: branch, driver, guide,
+vehicle, status, type are lists from the database; dates are pickers; seats,
+mileage and prices accept only digits; the Lodgings destination list has
+cities only; Reservations offers only the **free** seats of the chosen trip.
+
+### 3.2.3 - Bonus features  *(1 min)*
+
+1. **Smart vehicle selection** - Trips → **Max seats**: `40` → three buses
+   (50, 52, 60 seats); `60` → one; `999` → *No available vehicles with 999+
+   seats*. Only vehicles that are Available and big enough. (Three buses
+   because 3.1.4.3 made bus 9 Available again; while it is on a trip, it is
+   left out - which is the point.)
+2. **Trip details** - trip 1 → **Show Trip Details**: driver *Takis Volanis*
+   (licence D, 10 years), guide *Zoi Laskari* (French), the hotels, the
+   passengers.
+3. **Auto-booking** - shown in 3.1.3.3.
+
+### Reservations - the price by age  *(1 min)*
+
+**GUI** - **Reservations**: customer `C1 Lname1`, trip `ID 1 …`, the first free
+seat (**4** - seats 1-3 are taken), **Book Reservation** → cost **500**.
+Again with `C16 Lname16` → **300**.
+
+**Say:** nobody types the price: `sp_calculate_reservation_cost` takes the adult
+or the child price of the trip from the customer's age.
+
+**Test** - `gui_reservation_price.sql` → **3 / 3**
+
+### Staff - the salary guard  *(2 min)*
+
+**GUI** - **Staff**:
+
+1. Choose category `DRIVER`: the licence, route and experience fields appear
+   (`GUIDE` → CV and language, `ADMIN` → type and diploma).
+2. Select `AT101` → **Update Salary** → `1515` (+1 %).
+   > **Trigger Denied** - *branch is not profitable*
+
+**Say:** a raise needs a profitable branch and at most 2 %. With our data every
+branch pays more in salaries than it takes in.
+
+To also show a raise **accepted**, run this in IntelliJ (lowering is always
+allowed), then reopen **Staff**:
+
+```sql
+UPDATE worker SET wrk_salary = 100 WHERE wrk_br_code = 1;
+```
+
+`AT101` → `101` → *Salary updated successfully*. → `110` → **Trigger Denied** -
+*exceeds 2% limit*.
+
+**Test** - `gui_salary_guard.sql` → **12 / 12**
+(lowering, no change, +1 %, exactly +2 %, above 2 % refused, any raise refused
+in a branch without profit)
+
+### Admin - branch financials  *(30 s)*
+
+**GUI** - **Admin & Logs → Branch Financials** → `Athens` → **Calculate**:
+revenue, expenses and profit ratio from `sp_branch_financials` - the procedure
+the salary trigger uses.
+
+**Test** - `gui_branch_financials.sql` → **5 / 5**
+
+---
+
+## If there is time, or if you are asked "does everything work?"
+
+```bash
+docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/Tests.sql
+```
+
+> All 154 checks, under a second: `154 | 154 | 0 | ALL TESTS PASSED`.
+
+## After the exam, or to rehearse again
+
+Run `queries/Reset.sql` in IntelliJ (or `docker compose down -v && docker compose up -d`).
+Do **not** reset in the middle of the demo: 3.1.3.3 and 3.1.4.3 use the trip you
+created in 3.1.3.1.
+
+## If something goes wrong
 
 | Problem | Fix |
 |---|---|
-| The demo data is in a strange state | run `queries/Reset.sql` in the IDE (one second) |
-| A `Demo.sql` block was left half way | run `ROLLBACK;`, or `queries/Reset.sql` |
-| "Connection Failed" in the status bar | `docker compose up -d`, wait for healthy |
-| A change is refused with `foreign key constraint fails` on `dba_users` | The account is not a registered DBA; reconnect (the app registers it) or `INSERT IGNORE INTO dba_users (dba_username, dba_start_date) VALUES ('root', CURDATE());` |
+| "Connection Failed" in the GUI status bar | `docker compose up -d`, wait for healthy, restart the GUI |
+| A GUI table does not show a change | open the screen again from the menu on the left |
+| The data is in a strange state | run `queries/Reset.sql` in IntelliJ (one second), restart the GUI |
+| A change is refused with `foreign key constraint fails` on `dba_users` | restart the GUI - it registers the account again on connect |
 | Everything is broken | `docker compose down -v && docker compose up -d` - a clean install in the demo state (about 10 seconds) |
-
-## 4. Questions you may be asked
-
-**"Where is the input restricted?" (3.2.2)** - Every form takes its values from
-the database: branches, drivers, guides, destinations (cities only for
-lodging), customers, trips, the free seats of the chosen trip, vehicles with
-enough seats. Dates use date pickers, numbers use numeric-only fields, ENUM
-columns become lists. The Universal Manager builds all of this from the schema
-at runtime.
-
-**"How do you know it works?"** - `queries/Tests.sql`: 154 checks on the
-database in plain SQL, every procedure and trigger shown both accepting and
-refusing, run on the live database in under a second without changing a row.
-The same checks are split into one file per question in `queries/tests/`, so
-any single question can be proved on its own. Behind that, the project has a
-full developer suite (`tests/run_all.sh`: 165 database checks, 182 on the
-application code behind every screen and button, and a check that every input
-on all 8 screens carries a label).
-
-**"What happens if two checks fail at once?"** -
-`CALL sp_assign_vehicle_to_trip(1, 4, 1)` -> the alert names both reasons:
-`vehicle is Maintenance; mileage 1 < recorded 200000`.
