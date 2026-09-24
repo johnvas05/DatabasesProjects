@@ -203,7 +203,9 @@ INSERT INTO trip (tr_departure, tr_return, tr_maxseats, tr_cost_adult, tr_cost_c
                                                                                                                                                       ('2026-12-20', '2026-12-27', 50, 800, 400, 'PLANNED', 3, 'AT123', 'AT115', 6),
                                                                                                                                                       ('2027-01-05', '2027-01-10', 50, 600, 300, 'PLANNED', 4, 'AT124', 'AT113', 9);
 -- minimum participants: 20% of the seats, at least 2
-UPDATE trip SET tr_min_participants = GREATEST(2, FLOOR(tr_maxseats / 5));
+-- (every UPDATE here has a WHERE, even when it covers all rows: IntelliJ
+-- stops a script at an UPDATE without WHERE to ask for confirmation)
+UPDATE trip SET tr_min_participants = GREATEST(2, FLOOR(tr_maxseats / 5)) WHERE tr_id > 0;
 
 
 -- Destinations of each trip with real stay dates and visit order (to_sequence).
@@ -264,11 +266,13 @@ INSERT INTO event (ev_tr_id, ev_start, ev_end, ev_descr) VALUES
 
 -- 1. Update Emails (Pattern: name.lname@mail.com)
 UPDATE customer
-SET cust_email = CONCAT(LOWER(cust_name), '.', LOWER(cust_lname), '@mail.com');
+SET cust_email = CONCAT(LOWER(cust_name), '.', LOWER(cust_lname), '@mail.com')
+WHERE cust_id > 0;
 
 -- 2. Update Addresses (Generic dummy addresses)
 UPDATE customer
-SET cust_address = CONCAT('Street ', cust_id, ', City ', (cust_id % 5) + 1);
+SET cust_address = CONCAT('Street ', cust_id, ', City ', (cust_id % 5) + 1)
+WHERE cust_id > 0;
 
 -- 3. Update Birth Dates (Crucial for Pricing)
 -- We will make the first 15 customers Adults (born 1980-1990)

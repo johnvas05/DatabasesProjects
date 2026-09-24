@@ -379,6 +379,22 @@ check "every [REFUSED] step is refused with the announced message, nothing else 
 check "the presentation script leaves the database unchanged" \
     "$([[ "$(q "$demo_snapshot")" == "$demo_before" ]] && echo unchanged || echo CHANGED)" "unchanged"
 
+# Reset.sql and Demo.sql are run inside IntelliJ. IntelliJ stops a script at
+# an UPDATE or DELETE without a WHERE clause to ask for confirmation, and a
+# Reset.sql cancelled there leaves the database half empty (no reservations,
+# no lodgings). Every such statement must carry a WHERE, even a covering one.
+for f in queries/Reset.sql queries/Demo.sql; do
+    unsafe=$(awk '
+        /^[[:space:]]*--/ { next }
+        { if (stmt == "") start = NR; stmt = stmt " " $0 }
+        /;[[:space:]]*$/ {
+            s = toupper(stmt); gsub(/[[:space:]]+/, " ", s); sub(/^ /, "", s)
+            if ((s ~ /^UPDATE / || s ~ /^DELETE /) && s !~ / WHERE /) printf "line %d; ", start
+            stmt = ""
+        }' "$f")
+    check "$(basename "$f") has no UPDATE/DELETE without WHERE (IntelliJ would stop there)" "${unsafe:-none}" "none"
+done
+
 # ---------------------------------------------------------------- SQL tests after a GUI demo
 # In the exam a feature is shown in the GUI and its SQL test is run right
 # after. The GUI changes the data the tests rely on (a new trip takes bus 9,

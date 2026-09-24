@@ -383,7 +383,8 @@ SELECT log_id, log_timestamp, log_dba_username, log_table_name, log_action_type,
 FROM log_actions ORDER BY log_id;
 
 -- the account must be a registered DBA: remove it and try again
-DELETE FROM log_actions;
+-- (WHERE covers every row; it is there so IntelliJ does not stop to ask)
+DELETE FROM log_actions WHERE log_id > 0;
 DELETE FROM dba_users WHERE dba_username = SUBSTRING_INDEX(USER(), '@', 1);
 -- [REFUSED] expect: foreign key constraint fails
 INSERT INTO customer (cust_name, cust_lname) VALUES ('Not', 'ADba');
