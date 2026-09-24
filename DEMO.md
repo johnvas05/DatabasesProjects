@@ -9,30 +9,26 @@ the numbers on the screen. Reset, then follow the steps in order.
 
 ---
 
-## 0. Before you start
+## 0. Before you start (no shell scripts needed)
+
+On the computer of whoever shares the screen:
 
 ```bash
+docker compose down -v
 docker compose up -d
 ```
 
-```bash
-tests/reset_db.sh
-```
+This installs the database **already in the demo state**: the seed data of the
+report, every reservation priced, no hotel bookings, an empty audit log, and the
+90 000 history rows. There is no reset step. Wait until the container reports
+`healthy` (about 10 seconds). `down -v` throws away whatever was in the database
+before, which is the point.
 
-The reset puts every table back to the seed data of the report, empties the
-hotel bookings and the audit log, and starts the ids at 1 again. The 90 000
-rows of `trip_history` are kept (they take minutes to regenerate).
+Connect the IDE (IntelliJ / DataGrip) to `localhost:3307`, user `root`,
+password `john2005`, database `baseisproject`, and open `queries/Demo.sql`.
 
-Run it again at any point - between two rehearsals, or if a demo goes sideways.
-
-Optionally show that everything still works:
-
-```bash
-tests/run_all.sh
-```
-
-> 146 database checks + 182 application checks + the label check on all
-> 8 screens, all green.
+If the data gets into a strange state during a rehearsal, open
+`queries/Reset.sql` in the IDE and run the whole file (one second).
 
 Then start the application:
 
@@ -45,94 +41,55 @@ If `mvn` is not on the PATH, the Maven bundled with IntelliJ works:
 
 ---
 
-## 1. Part A - the database (3.1.x)
+## 1. Part A - the database (3.1.x), question by question
 
-### The whole database, checked in one script
+The examiner follows the assignment, so `queries/Demo.sql` does too. It has one
+block per question, in this order:
 
-If you only get to show one thing, show this:
+| Block | What you show |
+|---|---|
+| 3.1.1 | the row count of every table against its minimum |
+| 3.1.2.1 | the vehicles; a car with 30 seats and a bus with 8 refused (CHECK) |
+| 3.1.2.2 | the lodgings, Paris → France, the stays of trip 1 with their dates; a hotel "in France" refused (trigger), a hostel with stars refused (CHECK) |
+| 3.1.2.3 | the 90 000 history rows |
+| 3.1.2.4 | the DBA accounts and the structure of the log |
+| 3.1.3.1 | vehicle 9 assigned to trip 14 (all five checks PASS), then **each check failing on its own**: InUse, Maintenance, too few seats, licence B on a bus, licence B fine on a van, date overlap, lower mileage, two at once, trip/vehicle not found |
+| 3.1.3.2 | the search; free rooms shrinking after a booking; nothing found; the order (price, stars, rating); an inactive hotel left out |
+| 3.1.3.3 | trip 1 booked (1000 + 300 = 1300), booked again (still 2), 2 rooms for 3 passengers; all-or-nothing when London is full; no confirmed passengers; unknown trip |
+| 3.1.3.4 | both reports, EXPLAIN with the index ("Using index") and without it (full scan), and the time of each |
+| 3.1.4.1 | changes to a customer, a vehicle and a reservation appear in the log with their details; an account that is not a DBA cannot change anything |
+| 3.1.4.2 | 3 nights and 1080.00 computed by the trigger; a stay of 0 nights and one that ends before it starts refused |
+| 3.1.4.3 | bus 9 back to Available with 350 km added; no double count; another status leaves the vehicle alone |
+| Part B support | the reservation price (500 adult, 300 child), branch financials, the salary guard (refused, +1 %, +2 %, refused above 2 %) |
+
+**How to run it:** put the cursor on a statement and press Ctrl+Enter
+(Cmd+Enter on a Mac), one statement at a time. Do not run the whole file at
+once: the statements marked `[REFUSED]` fail on purpose, and the error is what
+you are showing. Each `-- Say:` line is one sentence you can use to explain the
+block. Every block ends with `ROLLBACK`, so the database is back in the demo
+state for the next question.
+
+**If you are asked "does it handle every case?"**, run the test file of that
+question. It checks every case and prints one PASS/FAIL line for each:
+
+```bash
+docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/tests/3.1.3.1_assign_vehicle.sql
+```
+
+Or all 154 checks at once:
 
 ```bash
 docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/Tests.sql
 ```
 
-> 154 checks - schema, seed data, the business rules of section 2, every stored
-> procedure, every trigger, the indexes - and a table at the end:
-> `154 | 154 | 0 | ALL TESTS PASSED`.
+> `154 | 154 | 0 | ALL TESTS PASSED`, in under a second, on the live database,
+> and nothing changes: the last row of the output shows it (customers 20,
+> reservations 24, room_usage 0, vehicle 9 `Available/90000`). The warning
+> about a non-transactional table at the end is expected.
 >
-> It runs in under a second **on the live database and changes nothing**: the
-> whole script is one transaction that is rolled back before the report is
-> printed. The last row of the output proves it (customers 20, reservations 24,
-> room_usage 0, vehicle 9 `Available/90000`). You can run it again straight
-> away. The warning about a non-transactional table is expected - it is the
-> MEMORY table that carries the report through the rollback.
-
-Then walk through the interesting checks by hand.
-
-Open a SQL client on the container:
-
-```bash
-docker exec -it baseis-mariadb mariadb -uroot -pjohn2005 baseisproject
-```
-
-### 3.1.3.1 Assigning a vehicle - five checks in one procedure
-
-```sql
-CALL sp_assign_vehicle_to_trip(14, 9, 90500);
-```
-> Five rows, all **PASS**, then `Success: vehicle 9 assigned to trip 14`.
-> Vehicle 9 becomes `InUse` and its mileage becomes 90 500.
-
-Now show each check refusing on its own:
-
-```sql
-CALL sp_assign_vehicle_to_trip(1, 4, 200100);   -- vehicle is in Maintenance
-CALL sp_assign_vehicle_to_trip(8, 1, 150100);   -- driver has licence B, the bus needs C/D
-CALL sp_assign_vehicle_to_trip(2, 1, 150100);   -- the bus is already on trip 1 those days
-```
-> Each one prints the full PASS/FAIL table first, then rejects with the reason.
-
-### 3.1.3.2 Searching for accommodation
-
-```sql
-CALL sp_search_accommodation(1, '2026-06-01', '2026-06-05', 2, @id);
-```
-> The hotels of Paris with enough free rooms, cheapest first, with their
-> amenities. `@id` holds the best match.
-
-### 3.1.3.3 Booking a whole trip at once
-
-```sql
-CALL sp_book_trip_accommodation(1);
-```
-> One lodging per destination: Le Grand Paris (4 nights, 1000.00) and
-> London Stay (5 nights, 300.00), total 1300.00.
-
-### 3.1.4 Triggers
-
-```sql
--- 3.1.4.2 nights and cost are computed on insert
-INSERT INTO room_usage (ru_trip_id, ru_lodging_id, ru_checkin, ru_checkout, ru_rooms_count)
-VALUES (11, 3, '2026-10-01', '2026-10-04', 3);
-SELECT ru_nights, ru_total_cost FROM room_usage WHERE ru_trip_id = 11;   -- 3 nights, 1080.00
-
--- 3.1.4.3 completing a trip frees the vehicle and adds its kilometres
-UPDATE trip SET tr_status = 'COMPLETED', tr_km = 350 WHERE tr_id = 14;
-SELECT v_status, v_mileage FROM vehicle WHERE v_id = 9;                  -- Available, 90850
-
--- 3.1.4.1 every change is logged, on all seven tables
-SELECT log_table_name, log_action_type, log_dba_username, log_details
-FROM log_actions ORDER BY log_id DESC LIMIT 5;
-```
-
-### 3.1.3.4 The 90 000-row history and its indexes
-
-```sql
-CALL sp_history_revenue('2021-01-01', '2021-12-31');
-EXPLAIN SELECT SUM(th_revenue) FROM trip_history
-WHERE th_departure BETWEEN '2021-01-01' AND '2021-12-31';   -- key: idx_hist_dep_rev
-```
-
-After Part A, run `tests/reset_db.sh` again before the GUI demo.
+> **On Windows PowerShell**, `<` does not work. Use
+> `Get-Content queries\Tests.sql -Raw | docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject`
+> instead. In `cmd.exe` the `<` form works as it is.
 
 ---
 
@@ -255,10 +212,11 @@ After Part A, run `tests/reset_db.sh` again before the GUI demo.
 
 | Problem | Fix |
 |---|---|
-| The demo data is in a strange state | `tests/reset_db.sh` |
+| The demo data is in a strange state | run `queries/Reset.sql` in the IDE (one second) |
+| A `Demo.sql` block was left half way | run `ROLLBACK;`, or `queries/Reset.sql` |
 | "Connection Failed" in the status bar | `docker compose up -d`, wait for healthy |
 | A change is refused with `foreign key constraint fails` on `dba_users` | The account is not a registered DBA; reconnect (the app registers it) or `INSERT IGNORE INTO dba_users (dba_username, dba_start_date) VALUES ('root', CURDATE());` |
-| Everything is broken | `docker compose down -v && docker compose up -d` reloads the whole dump (about a minute) |
+| Everything is broken | `docker compose down -v && docker compose up -d` - a clean install in the demo state (about 10 seconds) |
 
 ## 4. Questions you may be asked
 
@@ -269,12 +227,14 @@ enough seats. Dates use date pickers, numbers use numeric-only fields, ENUM
 columns become lists. The Universal Manager builds all of this from the schema
 at runtime.
 
-**"How do you know it works?"** - Two answers. `queries/Tests.sql` is 100
-checks on the database in plain SQL, runs on the live database in under a
-second and changes nothing. `tests/run_all.sh` is the full suite: 146 checks on
-the database, 182 on the application (every screen and every button, including
-the three bonus features) and a check that every input on all 8 screens carries
-a label. The shell suites run on throw-away copies of the database.
+**"How do you know it works?"** - `queries/Tests.sql`: 154 checks on the
+database in plain SQL, every procedure and trigger shown both accepting and
+refusing, run on the live database in under a second without changing a row.
+The same checks are split into one file per question in `queries/tests/`, so
+any single question can be proved on its own. Behind that, the project has a
+full developer suite (`tests/run_all.sh`: 165 database checks, 182 on the
+application code behind every screen and button, and a check that every input
+on all 8 screens carries a label).
 
 **"What happens if two checks fail at once?"** -
 `CALL sp_assign_vehicle_to_trip(1, 4, 1)` -> the alert names both reasons:

@@ -13,7 +13,12 @@ This starts a MariaDB 11 container named `baseis-mariadb` on **localhost:3307**
 `baseisproject` database via `docker/init-db.sh` (it strips the `DEFINER` clauses
 and sets the collation MariaDB needs for the stored procedures).
 
-To reset the data, remove the volume and start again:
+The dump is the **demo state**: the seed data of the report, every reservation
+priced, no hotel bookings, an empty audit log and the 90 000 history rows. A
+fresh install is ready for the presentation with nothing else to run, and every
+test passes on it.
+
+To reset the data, remove the volume and start again (about 10 seconds):
 
 ```bash
 docker compose down -v && docker compose up -d
@@ -84,24 +89,33 @@ columns get date pickers, boolean flags become check boxes.
 
 ## Resetting the demo data
 
-```bash
-tests/reset_db.sh
-```
-
-Puts every table back to the seed data of the report, empties the hotel bookings
-(`room_usage`) and the audit log (`log_actions`), prices every reservation again
-and restarts the ids at 1. `trip_history` (90 000 rows) is kept, because
-regenerating it takes minutes. Run it before a presentation and between two
-rehearsals. The script it runs is `queries/Reset.sql`, which also works on its own:
+Open `queries/Reset.sql` in the IDE and run the whole file, or:
 
 ```bash
 docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 baseisproject < queries/Reset.sql
 ```
 
-`DEMO.md` is a step-by-step walkthrough of the whole project for the
-presentation. `CHEATSHEET.md` is the quick reference to keep open next to it:
-for every requirement, how to prove it in SQL **and** how to show it in the
-GUI, including how to make each rule fail on purpose.
+Puts every table back to the seed data of the report, empties the hotel bookings
+(`room_usage`) and the audit log (`log_actions`), prices every reservation again
+and restarts the ids at 1. `trip_history` (90 000 rows) is kept, because
+regenerating it takes minutes. It takes a second. (`tests/reset_db.sh` does the
+same from a shell.)
+
+---
+
+## The presentation
+
+| File | Use it for |
+|---|---|
+| `queries/Demo.sql` | **Part A, question by question**, in the order of the assignment. Run it in the IDE one statement at a time: the records used, the case that works (`[OK]`), every case the database refuses (`[REFUSED]`, with the error to expect), and a one-sentence explanation per block. Each block is rolled back. |
+| `queries/tests/<question>.sql` | "Does it handle every case?" - the checks of one question, with a PASS/FAIL line per case. Runs on its own and changes nothing. |
+| `queries/Tests.sql` | all 154 checks at once, in under a second, changing nothing |
+| `DEMO.md` | the walkthrough of the whole presentation, Part A and the GUI of Part B |
+| `CHEATSHEET.md` | the quick reference to keep open: for every requirement, where the code is, how to prove it in SQL, how to show it in the GUI, how to make it fail on purpose |
+
+None of these need a shell script. On Windows PowerShell, where `<` does not
+work, pipe the file instead:
+`Get-Content queries\Tests.sql -Raw | docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject`.
 
 ---
 
@@ -126,6 +140,13 @@ is untouched. (The report survives the rollback because it is kept in a MEMORY
 table, which is why the client prints a warning about a non-transactional
 table. That warning is expected.) It takes under a second.
 
+`queries/tests/` holds the same checks split into one file per question
+(`3.1.3.1_assign_vehicle.sql`, `3.1.4.2_stay_nights_and_cost.sql`, ...), each
+complete on its own, so a single question can be proved without the rest; the
+index is `queries/tests/README.md`. The files are generated from `Tests.sql` by
+`tests/split_sql_tests.sh` - edit `Tests.sql`, then run the script again
+(`tests/db_tests.sh` fails if they are out of date).
+
 ### The full suite
 
 With the container running:
@@ -134,14 +155,17 @@ With the container running:
 tests/run_all.sh
 ```
 
-**`tests/db_tests.sh` - 146 checks on the database (3.1.x).** Loads the dump into
+**`tests/db_tests.sh` - 165 checks on the database (3.1.x).** Loads the dump into
 a throw-away `baseisproject_test` database and checks every stored procedure and
 trigger of Part A (vehicle assignment checks, accommodation search and
 auto-booking, cost/nights trigger, log triggers on all seven tables, trip
 completion trigger, history indexes, reservation pricing, salary guard), the
 business rules of the description (one category per worker, driver route/licence
 vs. trip, vehicle type vs. seats, stars only for hotels/resorts, lodging only in
-city destinations) and the reset script.
+city destinations), the reset script, and the SQL-only suite: `Tests.sql`, each
+file of `queries/tests/` on its own, and `Demo.sql` held to its own annotations
+(every `[REFUSED]` step refused with the announced message, nothing else
+failing, the database unchanged).
 
 **`tests/app_tests.sh` - 182 checks on the application (3.2.x).** Compiles the
 classes behind the JavaFX screens (the DAOs, the models and
@@ -183,7 +207,9 @@ in the demo state.
 | `CalculateReservationCost.sql`, `PROCEDURE.sql`, `TRIGGER.sql` | reservation pricing, branch financials, salary guard (used by the GUI) |
 | `Upgrade_2026-09.sql` | one-off upgrade of the January dump: real stay dates and `to_sequence`, `ru_nights`, covering indexes, lodging seed with postal codes, reservation prices, minimum participants, driver route/licence consistency, events for every trip, DBA usernames, CHECK constraints (vehicle type by seats, stars only for hotels/resorts), city/country destinations |
 
+| `Demo.sql` | the presentation of Part A, question by question: records, the working case and every refused case of each procedure and trigger, one statement at a time, each block rolled back |
 | `Tests.sql` | the database test suite as one SQL script: 154 checks with a PASS/FAIL report, every procedure and trigger shown both accepting and refusing, run inside a transaction that is rolled back, so it changes nothing |
+| `tests/` | the checks of `Tests.sql`, one self-contained file per question (generated by `tests/split_sql_tests.sh`) |
 | `Reset.sql` | puts the database back into the demo state: the seed data of `Insertions.sql` (with reproducible birth dates), reservation prices, empty `room_usage` and `log_actions`, ids restarting at 1, `trip_history` kept |
 
 `baseisproject_dump.sql` is the complete database (schema, data, routines, triggers) after all of the above.

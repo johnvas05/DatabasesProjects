@@ -1,41 +1,89 @@
 # Cheat sheet - showing the project in the exam
 
 One page per question you might be asked. Each entry gives the **SQL** proof,
-the **GUI** proof, and what should appear on screen. Everything assumes the
-database is in the demo state (`tests/reset_db.sh`).
+the **GUI** proof, and what should appear on screen.
 
-**The three commands you need**
+## The exam in 30 minutes - no shell scripts needed
+
+The examiner goes through the assignment in order: every question of Part A,
+then the functionality of Part B. Everything below is plain SQL, the IDE, and
+the GUI - nothing depends on the `.sh` files.
+
+**Before the exam (whoever presents):**
 
 ```bash
-tests/reset_db.sh                                                                   # back to the demo state
-docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/Tests.sql   # 154 checks
-mvn javafx:run                                                                       # the GUI
+docker compose down -v
+docker compose up -d
 ```
+
+That installs the database **already in the demo state**: seed data, priced
+reservations, empty hotel bookings, an empty audit log, 90 000 history rows. No
+reset step. Wait until the container is healthy (about 10 seconds after the
+first start). Then connect the IDE to `localhost:3307`, user `root`, password
+`john2005`, database `baseisproject`.
+
+**Part A - one block per question, in `queries/Demo.sql`:**
+
+Open [`queries/Demo.sql`](queries/Demo.sql) in the IDE and run it **one
+statement at a time** (cursor on the statement, Ctrl+Enter / Cmd+Enter). It
+follows the order of the assignment: 3.1.1 → 3.1.2.x → 3.1.3.1 … 3.1.3.4 →
+3.1.4.1 … 3.1.4.3. For each question it shows the records it uses, the case
+that works (`[OK]`), and every case the database refuses (`[REFUSED]`, with
+the error you should see). Each block is rolled back, so the database is ready
+for the next question.
+
+**If they ask "does it handle every case?"** - run the test file of that
+question. Each file runs on its own, shows a PASS/FAIL line per case, and
+changes nothing:
+
+```bash
+docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/tests/3.1.3.1_assign_vehicle.sql
+```
+
+Or all 154 checks at once, in under a second:
+
+```bash
+docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject < queries/Tests.sql
+```
+
+> **On Windows PowerShell** `<` does not work. Use this instead (the SQL
+> files are plain ASCII, so piping them is safe):
+> `Get-Content queries\Tests.sql -Raw | docker exec -i baseis-mariadb mariadb -uroot -pjohn2005 -t baseisproject`
+> In `cmd.exe` the `<` form works as it is.
+
+**Part B - the GUI:** `mvn javafx:run`, then follow the GUI steps on this sheet.
+
+**If the data gets into a strange state:** open
+[`queries/Reset.sql`](queries/Reset.sql) in the IDE and run the whole file (it
+takes a second), or `docker compose down -v && docker compose up -d`.
 
 ---
 
 ## Where everything lives
 
-| Requirement | SQL file | GUI screen | Tests.sql section |
-|---|---|---|---|
-| 3.1.1 seed data | `Insertions.sql` | every table | 1 |
-| 3.1.2.1 vehicle | `cars.sql` | Vehicles | 2 |
-| 3.1.2.2 lodging, room_usage | `Accommodation.sql` | Lodgings | 2, 5 |
-| 3.1.2.3 trip_history (90 000) | `history.sql` | Universal Manager | 2, 15 |
-| 3.1.2.4 dba_users, log_actions | `AdminLog.sql` | Admin & Logs | 2, 12 |
-| 3.1.3.1 assign a vehicle | `VechicleProcedure.sql` | Trips → Add Trip | 10 |
-| 3.1.3.2 search accommodation | `AccommodationProcedure.sql` | (used by auto-booking) | 8 |
-| 3.1.3.3 book a whole trip | `AutoBookProcedure.sql` | Trips → Auto-Book | 9 |
-| 3.1.3.4 history + indexes | `history.sql` | – | 15 |
-| 3.1.4.1 audit log triggers | `Triggers.sql` | Admin → System Logs | 12 |
-| 3.1.4.2 nights and cost | `AccommodationProcedure.sql` | Trip Details | 6 |
-| 3.1.4.3 trip completion | `Triggers.sql` | Universal Manager → trip | 11 |
-| reservation pricing | `CalculateReservationCost.sql` | Reservations | 7 |
-| branch financials | `PROCEDURE.sql` | Admin → Branch Financials | 13 |
-| salary guard | `TRIGGER.sql` | Staff → Update Salary | 14 |
-| 3.2.1 CRUD on any table | – | Universal Manager | – |
-| 3.2.2 restricted input | – | every form | – |
-| 3.2.3 bonus features | – | Trips | 8, 9 |
+| Question | Code | Show it in SQL | All its cases | GUI |
+|---|---|---|---|---|
+| 3.1.1 seed data | `Insertions.sql` | Demo.sql § 3.1.1 | `tests/3.1.1_seed_data.sql` | every screen |
+| 3.1.2.1 vehicle | `cars.sql` | Demo.sql § 3.1.2.1 | `tests/3.1.2_new_tables.sql`, `tests/rules_section2_check_constraints.sql` | Vehicles |
+| 3.1.2.2 lodging, room_usage | `Accommodation.sql`, `Triggers.sql` | Demo.sql § 3.1.2.2 | `tests/3.1.2.2_lodging_in_a_city.sql` | Lodgings |
+| 3.1.2.3 trip_history (90 000) | `history.sql` | Demo.sql § 3.1.2.3 | `tests/3.1.2_new_tables.sql` | Universal Manager |
+| 3.1.2.4 dba_users, log_actions | `AdminLog.sql` | Demo.sql § 3.1.2.4 | `tests/3.1.2_new_tables.sql` | Admin & Logs |
+| 3.1.3.1 assign a vehicle | `VechicleProcedure.sql` | Demo.sql § 3.1.3.1 | `tests/3.1.3.1_assign_vehicle.sql` | Trips → Add Trip |
+| 3.1.3.2 search accommodation | `AccommodationProcedure.sql` | Demo.sql § 3.1.3.2 | `tests/3.1.3.2_search_accommodation.sql` | (inside auto-booking) |
+| 3.1.3.3 book a whole trip | `AutoBookProcedure.sql` | Demo.sql § 3.1.3.3 | `tests/3.1.3.3_book_whole_trip.sql` | Trips → Auto-Book |
+| 3.1.3.4 history + indexes | `history.sql` | Demo.sql § 3.1.3.4 | `tests/3.1.3.4_history_and_indexes.sql` | – |
+| 3.1.4.1 audit log triggers | `Triggers.sql`, `AdminLog.sql` | Demo.sql § 3.1.4.1 | `tests/3.1.4.1_audit_log.sql` | Admin → System Logs |
+| 3.1.4.2 nights and cost | `AccommodationProcedure.sql` | Demo.sql § 3.1.4.2 | `tests/3.1.4.2_stay_nights_and_cost.sql` | Trip Details |
+| 3.1.4.3 trip completion | `Triggers.sql` | Demo.sql § 3.1.4.3 | `tests/3.1.4.3_trip_completion.sql` | Universal Manager → trip |
+| reservation pricing | `CalculateReservationCost.sql` | Demo.sql, Part B | `tests/gui_reservation_price.sql` | Reservations |
+| branch financials | `PROCEDURE.sql` | Demo.sql, Part B | `tests/gui_branch_financials.sql` | Admin → Branch Financials |
+| salary guard | `TRIGGER.sql` | Demo.sql, Part B | `tests/gui_salary_guard.sql` | Staff → Update Salary |
+| section 2 rules in the data | – | – | `tests/rules_section2_data.sql` | – |
+| 3.2.1 CRUD on any table | `UniversalTableView.java` | – | – | Universal Manager |
+| 3.2.2 restricted input | every `*View.java` | – | – | every form |
+| 3.2.3 bonus features | `TripView.java`, `TripDAO.java` | – | – | Trips |
+
+(`tests/…` means `queries/tests/…`.)
 
 ---
 
@@ -185,7 +233,8 @@ INSERT INTO customer (cust_name, cust_lname) VALUES ('Not','ADba');  -- foreign 
 INSERT INTO dba_users (dba_username, dba_start_date) VALUES ('root', CURDATE());  -- put it back!
 ```
 
-> If you run this, put the row back, or run `tests/reset_db.sh`.
+> In `Demo.sql` this runs inside a transaction and the `ROLLBACK` puts the row
+> back. If you type it by hand, put the row back, or run `queries/Reset.sql`.
 
 ---
 
@@ -232,7 +281,8 @@ Now, back in the GUI, on worker **AT101**:
 | `110` (+10 %) | ❌ `Salary increase exceeds 2% limit` |
 | anything, after `UPDATE reservation SET res_total_cost = 0;` | ❌ `branch is not profitable` |
 
-Afterwards: `tests/reset_db.sh`.
+Afterwards run `queries/Reset.sql` in the IDE. (The salary block of `Demo.sql`
+shows all of this inside a transaction and rolls it back by itself.)
 
 ---
 
@@ -343,11 +393,11 @@ from the database, not from Java.
 
 | Problem | Fix |
 |---|---|
-| The data is in a strange state | `tests/reset_db.sh` |
+| The data is in a strange state | run `queries/Reset.sql` in the IDE (one second), or `docker compose down -v && docker compose up -d` |
 | "Connection Failed" in the status bar | `docker compose up -d`, wait for healthy |
 | `foreign key constraint fails` on `dba_users` | the account was removed from `dba_users`; reconnect, or re-insert it |
 | A trip cannot be deleted | reservations point at it — delete those first, or use the Universal Manager |
-| Everything is broken | `docker compose down -v && docker compose up -d` (about a minute) |
+| Everything is broken | `docker compose down -v && docker compose up -d` - a clean install in the demo state (about 10 seconds) |
 
 ## Three sentences to open with
 

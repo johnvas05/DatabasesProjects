@@ -720,8 +720,15 @@ CALL t_has('10. 3.1.3.1 vehicle', 'SUCCESS: the change is written to the audit l
 --    B. any other status       -> the vehicle is left alone
 --    C. already COMPLETED      -> the km are not added a second time
 --    D. COMPLETED without a vehicle -> nothing happens, and no error
---  All four are tested. Vehicle 9 stands at 90 500 km from section 10.
+--  All four are tested.
 -- =====================================================================
+
+-- the starting point: vehicle 9 is on trip 14, InUse, at 90 500 km.
+-- Section 10 leaves it exactly like this; it is set again here so that this
+-- section can also be run on its own (queries/tests/3.1.4.3_*.sql).
+UPDATE trip    SET tr_vehicle_id = 9 WHERE tr_id = 14;
+UPDATE vehicle SET v_status = 'InUse', v_mileage = 90500 WHERE v_id = 9;
+
 UPDATE trip SET tr_status = 'COMPLETED', tr_km = 350 WHERE tr_id = 14;
 CALL t_eq('11. 3.1.4.3 trip done', 'A. the vehicle is Available again and 350 km are added',
     (SELECT CONCAT(v_status, '/', v_mileage) FROM vehicle WHERE v_id = 9), 'Available/90850');

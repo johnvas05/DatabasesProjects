@@ -326,6 +326,59 @@ check "the reset can be run twice in a row" \
         | grep -c ERROR)" "0"
 check "  ...and still holds the seed data"       "$(q "SELECT COUNT(*) FROM customer")" "20"
 
+# ---------------------------------------------------------------- SQL test files
+# The database is in the demo state here (the reset above). queries/Tests.sql
+# and every per-question file of queries/tests/ must pass on it on their own.
+section "queries/Tests.sql and queries/tests/*.sql (the SQL-only test suite)"
+check "queries/tests/ is up to date with queries/Tests.sql" "$(tests/split_sql_tests.sh --check 2>&1)" "up to date"
+check "queries/Tests.sql passes" \
+    "$(docker exec -i "$CONTAINER" mariadb -uroot -p"$DB_PASSWORD" -N -B "$TDB" < queries/Tests.sql 2>&1)" \
+    "ALL TESTS PASSED"
+for f in queries/tests/*.sql; do
+    check "$(basename "$f") passes on its own" \
+        "$(docker exec -i "$CONTAINER" mariadb -uroot -p"$DB_PASSWORD" -N -B "$TDB" < "$f" 2>&1)" \
+        "ALL TESTS PASSED"
+done
+
+# ---------------------------------------------------------------- the presentation script
+# queries/Demo.sql is stepped through by hand in the exam. Run it here as a
+# whole, continuing after errors, and hold it to its own annotations: every
+# statement marked "-- [REFUSED] expect: <text>" must fail with <text> in the
+# message, no other statement may fail, and the database must end unchanged.
+section "queries/Demo.sql (the presentation script)"
+demo_snapshot="SELECT (SELECT COUNT(*) FROM customer), (SELECT COUNT(*) FROM reservation),
+    (SELECT COUNT(*) FROM room_usage), (SELECT COUNT(*) FROM log_actions), (SELECT COUNT(*) FROM dba_users),
+    (SELECT SUM(wrk_salary) FROM worker), (SELECT SUM(res_total_cost) FROM reservation),
+    (SELECT GROUP_CONCAT(CONCAT(v_id, v_status, v_mileage, v_seats) ORDER BY v_id) FROM vehicle),
+    (SELECT GROUP_CONCAT(CONCAT(tr_id, tr_status, IFNULL(tr_vehicle_id, '-'), IFNULL(tr_km, '-')) ORDER BY tr_id) FROM trip),
+    (SELECT GROUP_CONCAT(CONCAT(lg_id, lg_status, lg_total_rooms) ORDER BY lg_id) FROM lodging)"
+demo_before=$(q "$demo_snapshot")
+demo_errors=$(docker exec -i "$CONTAINER" mariadb -uroot -p"$DB_PASSWORD" --force -t "$TDB" < queries/Demo.sql 2>&1 >/dev/null \
+    | grep '^ERROR')
+demo_report=$(awk '
+    FNR == NR {
+        if (index($0, "-- [REFUSED] expect: ") == 1) { n++; aline[n] = FNR; atext[n] = substr($0, 22) }
+        next
+    }
+    /^ERROR/ {
+        match($0, /at line [0-9]+/); ln = substr($0, RSTART + 8, RLENGTH - 8) + 0
+        msg = substr($0, index($0, ": ") + 2)
+        best = 0
+        for (i = 1; i <= n; i++)
+            if (!used[i] && aline[i] < ln && (best == 0 || aline[i] > aline[best])) best = i
+        if (best && ln - aline[best] < 6 && index(msg, atext[best]) > 0) { used[best] = 1; ok++ }
+        else { bad++; print "unexpected error at line " ln ": " msg }
+        next
+    }
+    END {
+        for (i = 1; i <= n; i++) if (!used[i]) { bad++; print "not refused: line " aline[i] " (" atext[i] ")" }
+        printf "%d/%d refusals as announced, %d problems\n", ok, n, bad
+    }' queries/Demo.sql <(echo "$demo_errors"))
+check "every [REFUSED] step is refused with the announced message, nothing else fails" \
+    "$demo_report" ", 0 problems"
+check "the presentation script leaves the database unchanged" \
+    "$([[ "$(q "$demo_snapshot")" == "$demo_before" ]] && echo unchanged || echo CHANGED)" "unchanged"
+
 # ---------------------------------------------------------------- done
 docker exec -i "$CONTAINER" mariadb -uroot -p"$DB_PASSWORD" -e "DROP DATABASE IF EXISTS $TDB;"
 echo
