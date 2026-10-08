@@ -123,6 +123,8 @@ this demo).
 
 **SQL** - in IntelliJ, `queries/Demo.sql`, block **3.1.2.3**: the 90 000 trips of
 the history. (Not in the GUI: the table view would load 90 000 rows.)
+Block **3.1.2.4**: two DBAs at the same time, one who has left (end date), and a
+DBA without a start date refused (*cannot be null*).
 
 **Test** - `3.1.2_new_tables.sql` → **12 / 12**
 (the new tables, their rows, the new columns, all 26 triggers and 8 procedures)
@@ -207,7 +209,10 @@ statement at a time:
 2. `CALL sp_history_revenue(...)` - the revenue of 2021.
 3. `EXPLAIN` **with** the index → `key idx_hist_dep_rev`, Extra **`Using index`**.
 4. `EXPLAIN` **without** it (`IGNORE INDEX`) → type **`ALL`**, the whole table.
-5. `SHOW PROFILES` → about **8 ms without, 2 ms with** the index.
+5. `CALL sp_history_destinations(3)`, then its `EXPLAIN` with `idx_hist_dc_dep`
+   and without it (`IGNORE INDEX`) → again **`ALL`** without the index.
+6. `SHOW PROFILES` → (a) about **17-23 ms without, 4 ms with** the index;
+   (b) about **10 ms without, 6 ms with** it.
 
 **Say:** the column in the WHERE comes first and the column in the SELECT
 second, so the answer comes from the index alone, without reading the table.

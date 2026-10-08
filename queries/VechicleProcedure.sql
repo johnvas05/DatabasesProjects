@@ -1,13 +1,8 @@
 USE baseisproject;
 
--- =====================================================================
--- 3.1.3.1  Assign a vehicle to a trip
--- Arguments: trip id, vehicle id, current odometer reading of the vehicle.
--- Every check is evaluated and reported (PASS/FAIL result set). Only when
--- all checks pass is the vehicle assigned, set to 'InUse' and its mileage
--- recorded; otherwise the procedure raises an error listing the failures.
--- (The trip/trip.tr_vehicle_id and tr_km columns are added in cars.sql.)
--- =====================================================================
+-- 3.1.3.1 Assign a vehicle to a trip
+-- All checks run and each one shows PASS or FAIL. The vehicle is assigned
+-- only if all of them pass, otherwise we get an error with every reason.
 
 DELIMITER $$
 
@@ -38,7 +33,7 @@ BEGIN
     DECLARE chk_mileage   VARCHAR(4) DEFAULT 'PASS';
     DECLARE l_failures    VARCHAR(255) DEFAULT '';
 
-    -- 0. Existence of trip and vehicle
+    -- trip and vehicle must exist
     SELECT COUNT(*) INTO l_trip_exists    FROM trip    WHERE tr_id = p_trip_id;
     SELECT COUNT(*) INTO l_vehicle_exists FROM vehicle WHERE v_id  = p_vehicle_id;
     IF l_trip_exists = 0 THEN
@@ -48,7 +43,7 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Error: vehicle does not exist.';
     END IF;
 
-    -- 1. Gather data (table aliases avoid the column/variable name clash)
+    -- read what the checks need
     SELECT t.tr_drv_AT, t.tr_departure, t.tr_return
       INTO l_driver_id, l_trip_start, l_trip_end
       FROM trip t WHERE t.tr_id = p_trip_id;
@@ -64,6 +59,7 @@ BEGIN
       FROM reservation r
      WHERE r.res_tr_id = p_trip_id AND r.res_status IN ('CONFIRMED', 'PAID');
 
+    -- other trips of this vehicle whose dates overlap with this trip
     SELECT COUNT(*) INTO l_overlap_count
       FROM trip t
      WHERE t.tr_vehicle_id = p_vehicle_id
@@ -72,7 +68,7 @@ BEGIN
        AND t.tr_departure < l_trip_end
        AND t.tr_return    > l_trip_start;
 
-    -- 2. Checks
+    -- the checks (each failure is added to l_failures)
     IF l_vehicle_status <> 'Available' THEN
         SET chk_available = 'FAIL';
         SET l_failures = CONCAT(l_failures, 'vehicle is ', l_vehicle_status, '; ');
@@ -83,7 +79,7 @@ BEGIN
         SET l_failures = CONCAT(l_failures, l_seats, ' seats < ', l_reservation_count, ' reservations; ');
     END IF;
 
-    -- vehicles with more than 9 seats need a category C or D licence
+    -- more than 9 seats needs licence C or D
     IF l_seats > 9 AND (l_driver_license IS NULL OR l_driver_license NOT IN ('C', 'D')) THEN
         SET chk_license = 'FAIL';
         SET l_failures = CONCAT(l_failures, 'driver licence ', IFNULL(l_driver_license, 'missing'), ' (C/D needed); ');
@@ -99,7 +95,7 @@ BEGIN
         SET l_failures = CONCAT(l_failures, 'mileage ', p_current_mileage, ' < recorded ', l_old_mileage, '; ');
     END IF;
 
-    -- 3. Report the result of every check
+    -- show the result of every check
     SELECT 'Vehicle available' AS check_name, chk_available AS result,
            CONCAT('vehicle status = ', l_vehicle_status) AS details
     UNION ALL
@@ -116,7 +112,7 @@ BEGIN
     SELECT 'Mileage reading', chk_mileage,
            CONCAT('reading ', p_current_mileage, ' km, recorded ', l_old_mileage, ' km');
 
-    -- 4. Assign only if everything passed
+    -- assign only if nothing failed
     IF l_failures <> '' THEN
         SET l_failures = LEFT(CONCAT('Assignment rejected: ', l_failures), 128);
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = l_failures;

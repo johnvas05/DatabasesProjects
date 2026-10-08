@@ -343,7 +343,7 @@ done
 # ---------------------------------------------------------------- the presentation script
 # queries/Demo.sql is stepped through by hand in the exam. Run it here as a
 # whole, continuing after errors, and hold it to its own annotations: every
-# statement marked "-- [REFUSED] expect: <text>" must fail with <text> in the
+# statement marked "-- should fail: <text>" must fail with <text> in the
 # message, no other statement may fail, and the database must end unchanged.
 section "queries/Demo.sql (the presentation script)"
 demo_snapshot="SELECT (SELECT COUNT(*) FROM customer), (SELECT COUNT(*) FROM reservation),
@@ -357,7 +357,7 @@ demo_errors=$(docker exec -i "$CONTAINER" mariadb -uroot -p"$DB_PASSWORD" --forc
     | grep '^ERROR')
 demo_report=$(awk '
     FNR == NR {
-        if (index($0, "-- [REFUSED] expect: ") == 1) { n++; aline[n] = FNR; atext[n] = substr($0, 22) }
+        if (index($0, "-- should fail: ") == 1) { n++; aline[n] = FNR; atext[n] = substr($0, 17) }
         next
     }
     /^ERROR/ {
@@ -374,7 +374,7 @@ demo_report=$(awk '
         for (i = 1; i <= n; i++) if (!used[i]) { bad++; print "not refused: line " aline[i] " (" atext[i] ")" }
         printf "%d/%d refusals as announced, %d problems\n", ok, n, bad
     }' queries/Demo.sql <(echo "$demo_errors"))
-check "every [REFUSED] step is refused with the announced message, nothing else fails" \
+check "every should-fail step is refused with the announced message, nothing else fails" \
     "$demo_report" ", 0 problems"
 check "the presentation script leaves the database unchanged" \
     "$([[ "$(q "$demo_snapshot")" == "$demo_before" ]] && echo unchanged || echo CHANGED)" "unchanged"

@@ -1,16 +1,8 @@
 USE baseisproject;
 
--- =====================================================================
--- 3.1.4.1  Log triggers
--- Every INSERT / UPDATE / DELETE on trip, reservation, customer, destination,
--- vehicle, lodging and room_usage writes a row to log_actions with the
--- timestamp (default CURRENT_TIMESTAMP) and the DBA username.
--- The username is stored without the host part so that the same DBA is
--- logged identically from localhost, the Docker network or the GUI, and so
--- that it matches dba_users.dba_username (FK).
---
--- 3.1.4.3  Trip completion trigger (trg_complete_trip_vehicle_update)
--- =====================================================================
+-- 3.1.4.1 Log triggers: every insert/update/delete on these 7 tables writes
+-- a row to log_actions (time is filled by the column default).
+-- USER() gives 'name@host', we keep only the name so it matches dba_users.
 
 DELIMITER $$
 
@@ -200,10 +192,8 @@ BEGIN
                    OLD.ru_checkin, ' -> ', OLD.ru_checkout, ') deleted'));
 END$$
 
--- =====================================================================
--- 3.1.4.3  When a trip is completed and its final kilometres are recorded,
--- add them to the vehicle's mileage and set the vehicle back to Available.
--- =====================================================================
+-- 3.1.4.3 When a trip becomes COMPLETED, add its km to the vehicle
+-- and make the vehicle Available again.
 DROP TRIGGER IF EXISTS trg_complete_trip_vehicle_update$$
 CREATE TRIGGER trg_complete_trip_vehicle_update AFTER UPDATE ON trip FOR EACH ROW
 BEGIN
@@ -215,11 +205,9 @@ BEGIN
     END IF;
 END$$
 
--- =====================================================================
--- Spec 3.1.2.2: lodging is attached only to city destinations, never to
--- country (parent) destinations, i.e. destinations that other destinations
--- point to through dst_location.
--- =====================================================================
+-- 3.1.2.2 A lodging must be in a city, not in a country.
+-- A destination is a country if another destination points to it
+-- (dst_location). A CHECK can't look at another table, so we use triggers.
 DROP TRIGGER IF EXISTS trg_lodging_city_only_ins$$
 CREATE TRIGGER trg_lodging_city_only_ins BEFORE INSERT ON lodging FOR EACH ROW
 BEGIN

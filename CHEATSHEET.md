@@ -28,8 +28,8 @@ Open [`queries/Demo.sql`](queries/Demo.sql) in the IDE and run it **one
 statement at a time** (cursor on the statement, Ctrl+Enter / Cmd+Enter). It
 follows the order of the assignment: 3.1.1 → 3.1.2.x → 3.1.3.1 … 3.1.3.4 →
 3.1.4.1 … 3.1.4.3. For each question it shows the records it uses, the case
-that works (`[OK]`), and every case the database refuses (`[REFUSED]`, with
-the error you should see). Each block is rolled back, so the database is ready
+that works, and every case the database refuses (`should fail:`, with the
+error you should see). Each block is rolled back, so the database is ready
 for the next question.
 
 **If they ask "does it handle every case?"** - run the test file of that

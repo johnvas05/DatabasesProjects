@@ -1,7 +1,6 @@
 USE baseisproject;
 
--- Salary increase guard: a raise is allowed only if the worker's branch is
--- profitable (sp_branch_financials) and the raise is at most 2%.
+-- A raise is allowed only if the branch makes a profit and it is up to 2%.
 
 DELIMITER $$
 

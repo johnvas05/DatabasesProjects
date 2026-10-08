@@ -1,12 +1,8 @@
 USE baseisproject;
 
--- =====================================================================
--- 3.1.3.2  Search available accommodation for a destination and period
--- Arguments: destination id, arrival, departure, rooms required.
--- OUT parameter: id of the first lodging in the result list (NULL if none).
--- Existing bookings (room_usage) that overlap the period reduce the free rooms.
--- Order: price per night ASC, stars DESC, rating DESC.
--- =====================================================================
+-- 3.1.3.2 Search for lodging with enough free rooms in a city and period
+-- Free rooms = total rooms - rooms booked by other trips on overlapping dates.
+-- p_first_lodging_id returns the first one of the list (NULL if none).
 
 DELIMITER $$
 
@@ -22,7 +18,7 @@ CREATE PROCEDURE sp_search_accommodation(
 BEGIN
     SET p_first_lodging_id = NULL;
 
-    -- 1. Id of the best match (first row of the list below)
+    -- the best one (same query as the list below, first row only)
     SELECT lg_id INTO p_first_lodging_id
     FROM lodging l
     WHERE l.lg_dst_id = p_dst_id
@@ -36,7 +32,7 @@ BEGIN
     ORDER BY l.lg_cost_per_night ASC, l.lg_stars DESC, l.lg_rating DESC
     LIMIT 1;
 
-    -- 2. Full result list
+    -- the whole list
     SELECT
         l.lg_id             AS LodgingId,
         l.lg_name           AS Name,
@@ -70,10 +66,8 @@ BEGIN
     ORDER BY l.lg_cost_per_night ASC, l.lg_stars DESC, l.lg_rating DESC;
 END$$
 
--- =====================================================================
--- 3.1.4.2  Trigger: on every new accommodation booking compute the number
--- of nights and the total cost and store them on the record.
--- =====================================================================
+-- 3.1.4.2 Nights and cost of a new stay.
+-- BEFORE INSERT because we change the row itself (NEW) before it is saved.
 
 DROP TRIGGER IF EXISTS trg_calculate_accommodation_cost$$
 

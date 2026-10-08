@@ -1,16 +1,14 @@
 USE baseisproject;
 
--- Seed data for the extended database (2-person team: 2 x the per-person minimum
--- of the preparatory phase). Run after the tables exist (Query.sql, cars.sql,
--- Accommodation.sql, history.sql, AdminLog.sql). The 90 000 trip_history rows
--- are generated at the end by sp_generate_dummy_history (defined in history.sql).
+-- Data for all tables. We are 2 people, so every table has at least 2x the
+-- minimum of the preparatory phase. Run after the tables are created.
 
--- 1. Register yourself as DBA (Crucial for triggers!)
+-- the DBAs (the log triggers need the current user to be one)
 INSERT IGNORE INTO dba_users (dba_username, dba_start_date) VALUES
     (SUBSTRING_INDEX(USER(), '@', 1), CURDATE()),   -- the account running this script
     ('Teo', '2025-11-01');
 
--- 2. Clean Slate (Empty tables to avoid duplicate ID errors)
+-- empty the tables first
 SET FOREIGN_KEY_CHECKS = 0;
 TRUNCATE TABLE reservation;
 TRUNCATE TABLE event;
@@ -32,12 +30,12 @@ TRUNCATE TABLE lodging;
 TRUNCATE TABLE room_usage;
 SET FOREIGN_KEY_CHECKS = 1;
 
--- Languages (Target: 6)
+-- Languages (6)
 INSERT INTO language_ref (lang_code, lang_name) VALUES
                                                     ('EN', 'English'), ('FR', 'French'), ('DE', 'German'),
                                                     ('IT', 'Italian'), ('ES', 'Spanish'), ('GR', 'Greek');
 
--- Branches (Target: 6)
+-- Branches (6)
 INSERT INTO branch (br_code, br_street, br_num, br_city) VALUES
                                                              (1, 'Panepistimiou', 56, 'Athens'),
                                                              (2, 'Tsimiski', 22, 'Thessaloniki'),
@@ -46,13 +44,13 @@ INSERT INTO branch (br_code, br_street, br_num, br_city) VALUES
                                                              (5, 'Dodonis', 33, 'Ioannina'),
                                                              (6, 'Farsalon', 12, 'Larisa');
 
--- Branch Phones (Target: 10)
+-- Branch Phones (10)
 INSERT INTO phones (ph_br_code, ph_number) VALUES
                                                (1, '2101234567'), (1, '2107654321'), (2, '2310123456'), (2, '2310999888'),
                                                (3, '2610111222'), (4, '2810333444'), (5, '2651055566'), (6, '2410777888'),
                                                (1, '2109990000'), (2, '2310888777');
 
--- Destinations (Target: 10)
+-- Destinations (10)
 INSERT INTO destination (dst_name, dst_descr, dst_rtype, dst_language_code, dst_location) VALUES
                                                                                               ('Paris', 'France', 'ABROAD', 'FR', NULL),
                                                                                               ('London', 'UK', 'ABROAD', 'EN', NULL),
@@ -69,7 +67,7 @@ INSERT INTO destination (dst_name, dst_descr, dst_rtype, dst_language_code, dst_
 UPDATE destination SET dst_location = LAST_INSERT_ID() WHERE dst_name = 'Paris';
 
 
--- 1. Insert 26 Base Workers (AT101 to AT126)
+-- 26 workers: AT101-AT126
 -- Admins (10)
 INSERT INTO worker VALUES ('AT101', 'Nikos', 'Papadopoulos', 'nikos@ag.gr', 1500, 1);
 INSERT INTO worker VALUES ('AT102', 'Maria', 'Georgiou', 'maria@ag.gr', 1400, 2);
@@ -102,7 +100,7 @@ INSERT INTO worker VALUES ('AT124', 'Thanasis', 'Veggos', 'than@ag.gr', 1100, 5)
 INSERT INTO worker VALUES ('AT125', 'Lambros', 'Konstan', 'lam@ag.gr', 1100, 6);
 INSERT INTO worker VALUES ('AT126', 'Kostas', 'Voutsas', 'kv@ag.gr', 1100, 1);
 
--- 2. Assign Roles
+-- the role of each worker
 -- Admins (10)
 INSERT INTO admin (adm_AT, adm_type, adm_diploma) VALUES
                                                       ('AT101', 'ADMINISTRATIVE', 'MBA'), ('AT102', 'ACCOUNTING', 'Econ'),
@@ -111,7 +109,7 @@ INSERT INTO admin (adm_AT, adm_type, adm_diploma) VALUES
                                                       ('AT107', 'ADMINISTRATIVE', 'Diploma'), ('AT108', 'LOGISTICS', 'Cert'),
                                                       ('AT109', 'ACCOUNTING', 'BSc'), ('AT110', 'ADMINISTRATIVE', 'MBA');
 
--- Managers (6) - Assigning Admins to manage branches
+-- Managers (6)
 INSERT INTO manages (mng_adm_AT, mng_br_code) VALUES
                                                   ('AT101', 1), ('AT102', 2), ('AT103', 3),
                                                   ('AT104', 4), ('AT105', 5), ('AT106', 6);
@@ -140,7 +138,7 @@ INSERT INTO languages (lng_gui_AT, lng_language_code) VALUES
                                                           ('AT119', 'FR'), ('AT120', 'EN'), ('AT121', 'DE'), ('AT122', 'IT'),
                                                           ('AT123', 'ES'), ('AT124', 'GR'), ('AT125', 'EN'), ('AT126', 'FR');
 
--- Vehicles (10 Vehicles)
+-- Vehicles (10)
 INSERT INTO vehicle (v_br_code, v_license_plate, v_model, v_brand, v_type, v_seats, v_status, v_mileage) VALUES
                                                                                                              (1, 'IAA-1001', 'Tourismo', 'Mercedes', 'Bus', 50, 'Available', 150000),
                                                                                                              (1, 'IAA-1002', 'Sprinter', 'Mercedes', 'Mini-Bus', 20, 'Available', 80000),
@@ -153,7 +151,7 @@ INSERT INTO vehicle (v_br_code, v_license_plate, v_model, v_brand, v_type, v_sea
                                                                                                              (6, 'IFF-6001', 'Lion', 'Man', 'Bus', 52, 'Available', 90000),
                                                                                                              (1, 'IAA-1003', 'Yaris', 'Toyota', 'Car', 5, 'Available', 10000);
 
--- Customers (Target: 20)
+-- Customers (20)
 INSERT INTO customer (cust_name, cust_lname, cust_phone) VALUES
                                                              ('C1', 'Lname1', '6901'), ('C2', 'Lname2', '6902'), ('C3', 'Lname3', '6903'),
                                                              ('C4', 'Lname4', '6904'), ('C5', 'Lname5', '6905'), ('C6', 'Lname6', '6906'),
@@ -163,8 +161,7 @@ INSERT INTO customer (cust_name, cust_lname, cust_phone) VALUES
                                                              ('C16', 'Lname16', '6916'), ('C17', 'Lname17', '6917'), ('C18', 'Lname18', '6918'),
                                                              ('C19', 'Lname19', '6919'), ('C20', 'Lname20', '6920');
 
--- Trips (Target: 14)
--- We map different drivers (AT111-AT118) and guides (AT119-AT126) and vehicles.
+-- Trips (14)
 INSERT INTO trip (tr_departure, tr_return, tr_maxseats, tr_cost_adult, tr_cost_child, tr_status, tr_br_code, tr_gui_AT, tr_drv_AT, tr_vehicle_id) VALUES
                                                                                                                                                       ('2026-06-01', '2026-06-10', 50, 500, 300, 'PLANNED', 1, 'AT119', 'AT111', 1),
                                                                                                                                                       ('2026-06-05', '2026-06-12', 20, 400, 200, 'CONFIRMED', 1, 'AT120', 'AT112', 2),
@@ -184,8 +181,8 @@ INSERT INTO trip (tr_departure, tr_return, tr_maxseats, tr_cost_adult, tr_cost_c
 UPDATE trip SET tr_min_participants = GREATEST(2, FLOOR(tr_maxseats / 5));
 
 
--- Destinations of each trip with real stay dates and visit order (to_sequence).
--- Trips 1-4 visit two destinations.
+-- Destinations of each trip with dates and visit order.
+-- Trips 1-4 have two destinations.
 INSERT INTO travel_to (to_tr_id, to_dst_id, to_sequence, to_arrival, to_departure) VALUES
  (1, 1, 1, '2026-06-01 14:00:00', '2026-06-05 11:00:00'), (1, 2, 2, '2026-06-05 14:00:00', '2026-06-10 11:00:00'),
  (2, 2, 1, '2026-06-05 14:00:00', '2026-06-09 11:00:00'), (2, 3, 2, '2026-06-09 14:00:00', '2026-06-12 11:00:00'),
@@ -202,7 +199,7 @@ INSERT INTO travel_to (to_tr_id, to_dst_id, to_sequence, to_arrival, to_departur
  (13, 3, 1, '2026-12-20 14:00:00', '2026-12-27 11:00:00'),
  (14, 4, 1, '2027-01-05 14:00:00', '2027-01-10 11:00:00');
 
--- Reservations (Target: 24)
+-- Reservations (24)
 INSERT INTO reservation (res_tr_id, res_seatnum, res_cust_id, res_status) VALUES
                                                                               (1,1,1,'CONFIRMED'), (1,2,2,'CONFIRMED'), (1,3,3,'PENDING'),
                                                                               (2,1,4,'CONFIRMED'), (2,2,5,'PAID'),
@@ -219,8 +216,8 @@ INSERT INTO reservation (res_tr_id, res_seatnum, res_cust_id, res_status) VALUES
                                                                               (13,1,1,'PAID'), (13,2,2,'PAID'),
                                                                               (14,1,3,'CONFIRMED'), (14,2,4,'PENDING');
 
--- Events (Target: 20)
--- Just adding generic events for the first 10 trips (2 per trip)
+-- Events (20)
+-- 2 events for each of the first 10 trips
 INSERT INTO event (ev_tr_id, ev_start, ev_end, ev_descr) VALUES
                                                              (1, '2026-06-02 10:00', '2026-06-02 12:00', 'Museum'), (1, '2026-06-03 18:00', '2026-06-03 20:00', 'Dinner'),
                                                              (2, '2026-06-06 10:00', '2026-06-06 12:00', 'Walk'), (2, '2026-06-07 18:00', '2026-06-07 20:00', 'Show'),
@@ -231,7 +228,7 @@ INSERT INTO event (ev_tr_id, ev_start, ev_end, ev_descr) VALUES
                                                              (7, '2026-08-02 10:00', '2026-08-02 12:00', 'Hike'), (7, '2026-08-03 18:00', '2026-08-03 20:00', 'Camp'),
                                                              (8, '2026-08-11 10:00', '2026-08-11 12:00', 'Drive'), (8, '2026-08-12 18:00', '2026-08-12 20:00', 'Stop'),
                                                              (9, '2026-09-02 10:00', '2026-09-02 12:00', 'Fly'), (9, '2026-09-03 18:00', '2026-09-03 20:00', 'Land');
--- more events (every trip has at least one event; 20 rows = 2 x 10 minimum)
+-- more events, so every trip has at least one
 INSERT INTO event (ev_tr_id, ev_start, ev_end, ev_descr) VALUES
     (13, '2026-12-21 10:00:00', '2026-12-21 13:00:00', 'Christmas market walk'),
     (14, '2027-01-06 10:00:00', '2027-01-06 12:30:00', 'Guided city tour'),
@@ -240,22 +237,21 @@ INSERT INTO event (ev_tr_id, ev_start, ev_end, ev_descr) VALUES
     (12, '2026-11-02 10:00:00', '2026-11-02 12:00:00', 'Thames boat tour');
 
 
--- 1. Update Emails (Pattern: name.lname@mail.com)
+-- customer emails
 UPDATE customer
 SET cust_email = CONCAT(LOWER(cust_name), '.', LOWER(cust_lname), '@mail.com');
 
--- 2. Update Addresses (Generic dummy addresses)
+-- customer addresses
 UPDATE customer
 SET cust_address = CONCAT('Street ', cust_id, ', City ', (cust_id % 5) + 1);
 
--- 3. Update Birth Dates (Crucial for Pricing)
--- We will make the first 15 customers Adults (born 1980-1990)
+-- birth dates (used for adult/child price)
+-- customers 1-15 are adults
 UPDATE customer
 SET cust_birth_date = DATE_ADD('1980-01-01', INTERVAL FLOOR(RAND() * 3650) DAY)
 WHERE cust_id <= 15;
 
--- We will make the last 5 customers Children (born 2015-2020)
--- This ensures you can test "Child Pricing" logic later
+-- customers 16-20 are children
 UPDATE customer
 SET cust_birth_date = DATE_ADD('2015-01-01', INTERVAL FLOOR(RAND() * 1800) DAY)
 WHERE cust_id > 15;

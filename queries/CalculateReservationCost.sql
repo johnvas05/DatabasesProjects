@@ -1,10 +1,7 @@
 USE baseisproject;
 
--- =====================================================================
--- Reservation price: adult or child price of the trip depending on the
--- customer's age (birth date in customer). Used by the GUI after inserting
--- a reservation. Customers without a birth date are charged the adult price.
--- =====================================================================
+-- Price of a reservation: adult price from 18 years old, else child price.
+-- No birth date -> adult price. Called by the GUI after a new reservation.
 
 DELIMITER $$
 

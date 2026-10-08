@@ -1,7 +1,7 @@
 USE baseisproject;
 
--- Branch financials (revenue from reservations, expenses = salaries, profit
--- ratio). Used by trg_worker_salary_increase (TRIGGER.sql) and by the GUI.
+-- Revenue (reservations), expenses (salaries) and profit ratio of a branch.
+-- Used by the salary trigger (TRIGGER.sql) and the GUI.
 
 DELIMITER $$
 
