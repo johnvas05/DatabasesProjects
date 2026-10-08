@@ -78,8 +78,8 @@ takes a second), or `docker compose down -v && docker compose up -d`.
 | 3.1.4.2 nights and cost | `AccommodationProcedure.sql` | Demo.sql § 3.1.4.2 | `tests/3.1.4.2_stay_nights_and_cost.sql` | Trip Details |
 | 3.1.4.3 trip completion | `Triggers.sql` | Demo.sql § 3.1.4.3 | `tests/3.1.4.3_trip_completion.sql` | Universal Manager → trip |
 | reservation pricing | `CalculateReservationCost.sql` | Demo.sql, Part B | `tests/gui_reservation_price.sql` | Reservations |
-| branch financials | `PROCEDURE.sql` | Demo.sql, Part B | `tests/gui_branch_financials.sql` | Admin → Branch Financials |
-| salary guard | `TRIGGER.sql` | Demo.sql, Part B | `tests/gui_salary_guard.sql` | Staff → Update Salary |
+| branch financials | `BranchFinancials.sql` | Demo.sql, Part B | `tests/gui_branch_financials.sql` | Admin → Branch Financials |
+| salary guard | `SalaryTrigger.sql` | Demo.sql, Part B | `tests/gui_salary_guard.sql` | Staff → Update Salary |
 | section 2 rules in the data | – | – | `tests/rules_section2_data.sql` | – |
 | 3.2.1 CRUD on any table | `UniversalTableView.java` | – | – | Universal Manager |
 | 3.2.2 restricted input | every `*View.java` | – | – | every form |

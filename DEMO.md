@@ -211,8 +211,10 @@ statement at a time:
 4. `EXPLAIN` **without** it (`IGNORE INDEX`) → type **`ALL`**, the whole table.
 5. `CALL sp_history_destinations(3)`, then its `EXPLAIN` with `idx_hist_dc_dep`
    and without it (`IGNORE INDEX`) → again **`ALL`** without the index.
-6. `SHOW PROFILES` → (a) about **17-23 ms without, 4 ms with** the index;
-   (b) about **10 ms without, 6 ms with** it.
+6. Select the profiling lines and run them together. `SHOW PROFILES` →
+   (a) about **10 ms without, 4 ms with** the index; (b) about **9 ms
+   without, 2 ms with** it. DataGrip adds its own queries to the list: look
+   for the four `trip_history` lines.
 
 **Say:** the column in the WHERE comes first and the column in the SELECT
 second, so the answer comes from the index alone, without reading the table.

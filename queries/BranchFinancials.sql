@@ -1,7 +1,7 @@
 USE baseisproject;
 
 -- Revenue (reservations), expenses (salaries) and profit ratio of a branch.
--- Used by the salary trigger (TRIGGER.sql) and the GUI.
+-- Used by the salary trigger (SalaryTrigger.sql) and the GUI.
 
 DELIMITER $$
 

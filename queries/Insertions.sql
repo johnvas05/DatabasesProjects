@@ -1,6 +1,6 @@
 USE baseisproject;
 
--- Data for all tables. We are 2 people, so every table has at least 2x the
+-- 3.1.1 Data for all tables. We are 2 people, so every table has at least 2x the
 -- minimum of the preparatory phase. Run after the tables are created.
 
 -- the DBAs (the log triggers need the current user to be one)
@@ -113,6 +113,8 @@ INSERT INTO admin (adm_AT, adm_type, adm_diploma) VALUES
 INSERT INTO manages (mng_adm_AT, mng_br_code) VALUES
                                                   ('AT101', 1), ('AT102', 2), ('AT103', 3),
                                                   ('AT104', 4), ('AT105', 5), ('AT106', 6);
+
+-- Κυκλικη εξαρτηση μπαινει με update μετα γιατι branch -> admin -> worker -> branch 
 
 UPDATE branch SET br_manager_AT = 'AT101' WHERE br_code = 1;
 UPDATE branch SET br_manager_AT = 'AT102' WHERE br_code = 2;

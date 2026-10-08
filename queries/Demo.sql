@@ -1,10 +1,7 @@
--- Demo of Part A, one question at a time.
--- Run one statement at a time (Ctrl+Enter), not the whole file: some
--- statements are supposed to fail.
--- Each block ends with ROLLBACK, so nothing is changed. If something goes
--- wrong, run Reset.sql.
+-- Demo of part A. Run one statement at a time (Ctrl+Enter).
+-- Each block ends with ROLLBACK. If something goes wrong run Reset.sql.
 --
--- Records used:
+-- records used:
 --   trip 1     1-10 Jun 2026, Paris then London, vehicle 1, driver AT111 (D)
 --   trip 8     driver AT114 (licence B)
 --   trip 14    driver AT113 (licence D)
@@ -15,7 +12,7 @@
 --   customers 1-15 adults, 16-20 children
 
 
--- 3.1.1 Rows per table (we are 2 people, so 2x the minimum)
+-- 3.1.1 rows per table (team of 2 -> 2x the minimum)
 SELECT 'worker' AS table_name, COUNT(*) AS rows_now, 26 AS minimum FROM worker
 UNION ALL SELECT 'driver',       COUNT(*),  8 FROM driver
 UNION ALL SELECT 'guide',        COUNT(*),  8 FROM guide
@@ -115,7 +112,7 @@ ROLLBACK;
 -- 3.1.3.1 sp_assign_vehicle_to_trip: one case per check
 START TRANSACTION;
 
--- the trips and the vehicles of this scenario
+-- trips and vehicles used below
 SELECT t.tr_id, t.tr_departure, t.tr_return, t.tr_status, t.tr_vehicle_id,
        t.tr_drv_AT, d.drv_license,
        (SELECT COUNT(*) FROM reservation r
@@ -125,55 +122,53 @@ WHERE t.tr_id IN (1, 2, 3, 8, 11, 13, 14) ORDER BY t.tr_id;
 
 SELECT v_id, v_type, v_seats, v_status, v_mileage FROM vehicle WHERE v_id IN (1, 4, 8, 9, 10);
 
--- all five checks PASS: trip 14 (licence D) gets the 52-seat bus 9
+-- ok: trip 14 (licence D) gets bus 9
 CALL sp_assign_vehicle_to_trip(14, 9, 90500);
 
--- the result: the vehicle is InUse with the new reading, the trip points at it
+-- vehicle 9 is now InUse, trip 14 has vehicle 9
 SELECT v_id, v_status, v_mileage FROM vehicle WHERE v_id = 9;
 SELECT tr_id, tr_vehicle_id FROM trip WHERE tr_id = 14;
 
--- check 1 - the vehicle is already InUse (on trip 14, just now)
+-- vehicle already InUse
 -- should fail: vehicle is InUse
 CALL sp_assign_vehicle_to_trip(13, 9, 90600);
 
--- check 1 - the vehicle is in Maintenance
+-- vehicle in Maintenance
 -- should fail: vehicle is Maintenance
 CALL sp_assign_vehicle_to_trip(1, 4, 200100);
 
--- check 2 - trip 3 is popular: three more people pay, 6 in total,
---           and the car has only 5 seats
+-- not enough seats: 6 paid reservations, the car has 5 seats
 INSERT INTO reservation (res_tr_id, res_seatnum, res_cust_id, res_status, res_total_cost)
 VALUES (3, 4, 9, 'PAID', 600), (3, 5, 10, 'PAID', 600), (3, 6, 11, 'PAID', 600);
 -- should fail: 5 seats < 6 reservations
 CALL sp_assign_vehicle_to_trip(3, 10, 10100);
 
--- check 3 - the driver of trip 8 holds licence B, the bus has 50 seats
+-- wrong licence: driver of trip 8 has B, bus has 50 seats
 -- should fail: driver licence B (C/D needed)
 CALL sp_assign_vehicle_to_trip(8, 1, 150100);
 
--- check 3 - the same driver with a 9-seat van: the licence does not matter
--- all five checks PASS
+-- ok: same driver with a 9-seat van
 CALL sp_assign_vehicle_to_trip(8, 8, 20000);
 
--- check 4 - bus 1 is on trip 1 (1-10 June), trip 2 is 5-12 June
+-- overlap: bus 1 is on trip 1 (1-10 June), trip 2 is 5-12 June
 -- should fail: overlaps 1 other trip
 CALL sp_assign_vehicle_to_trip(2, 1, 150100);
 
--- check 5 - bus 1 has 150 000 km, the reading says 1 000
+-- mileage lower than the recorded one
 -- should fail: mileage 1000 < recorded 150000
 CALL sp_assign_vehicle_to_trip(11, 1, 1000);
 
--- two checks at once: every reason is reported
+-- two checks fail together
 -- should fail: vehicle is Maintenance; mileage 1 < recorded 200000
 CALL sp_assign_vehicle_to_trip(1, 4, 1);
 
--- a trip or a vehicle that does not exist
+-- trip / vehicle that does not exist
 -- should fail: trip does not exist
 CALL sp_assign_vehicle_to_trip(9999, 1, 1);
 -- should fail: vehicle does not exist
 CALL sp_assign_vehicle_to_trip(1, 9999, 1);
 
--- a refused assignment changed nothing
+-- nothing changed
 SELECT v_id, v_status, v_mileage FROM vehicle WHERE v_id IN (1, 4);
 
 ROLLBACK;
@@ -182,31 +177,29 @@ ROLLBACK;
 -- 3.1.3.2 sp_search_accommodation
 START TRANSACTION;
 
--- Paris, 1-5 June, 2 rooms -> Le Grand Paris, 100 free rooms
+-- Paris, 1-5 June, 2 rooms
 CALL sp_search_accommodation(1, '2026-06-01', '2026-06-05', 2, @best);
 SELECT @best AS best_lodging_id;
 
--- another trip books 95 of its 100 rooms for 3-7 June
+-- another trip books 95 of the 100 rooms (3-7 June)
 INSERT INTO room_usage (ru_trip_id, ru_lodging_id, ru_checkin, ru_checkout, ru_rooms_count)
 VALUES (11, 1, '2026-06-03', '2026-06-07', 95);
 
--- 5 rooms are still free -> AvailableRooms = 5
+-- 5 rooms left
 CALL sp_search_accommodation(1, '2026-06-01', '2026-06-05', 5, @best);
 
--- 6 rooms are not -> an empty list and NULL
+-- 6 rooms: nothing found, @best is NULL
 CALL sp_search_accommodation(1, '2026-06-01', '2026-06-05', 6, @best);
 SELECT @best AS best_lodging_id;
 
--- two cheaper lodgings at the same price: the one with stars comes first
+-- same price: the one with stars first
 INSERT INTO lodging (lg_dst_id, lg_name, lg_type, lg_stars, lg_rating, lg_address, lg_city, lg_total_rooms, lg_cost_per_night)
 VALUES (1, 'Demo Budget Inn', 'Hostel', NULL, 3.0, 'Rue X', 'Paris', 20, 30.00),
        (1, 'Demo Mid Hotel',  'Hotel',  3,    4.0, 'Rue Y', 'Paris', 20, 30.00);
--- Demo Mid Hotel, Demo Budget Inn, Le Grand Paris - in that order
 CALL sp_search_accommodation(1, '2026-09-01', '2026-09-03', 1, @best);
 
--- a lodging that is not active is never offered
+-- inactive lodgings are not shown
 UPDATE lodging SET lg_status = 'Inactive' WHERE lg_id = 1;
--- Le Grand Paris is gone from the list
 CALL sp_search_accommodation(1, '2026-09-01', '2026-09-03', 1, @best);
 
 ROLLBACK;
@@ -215,29 +208,29 @@ ROLLBACK;
 -- 3.1.3.3 sp_book_trip_accommodation (Auto-Book button in the GUI)
 START TRANSACTION;
 
--- trip 1: two stays, two confirmed passengers -> 1 room
+-- trip 1: Paris and London, 2 confirmed passengers -> 1 room
 SELECT tt.to_sequence, d.dst_name, tt.to_arrival, tt.to_departure
 FROM travel_to tt JOIN destination d ON d.dst_id = tt.to_dst_id
 WHERE tt.to_tr_id = 1 ORDER BY tt.to_sequence;
 SELECT res_seatnum, res_cust_id, res_status FROM reservation WHERE res_tr_id = 1;
 
--- Le Grand Paris 4 nights 1000.00 + London Stay 5 nights 300.00 = 1300.00
+-- expected total 1300.00
 CALL sp_book_trip_accommodation(1);
 
--- again: the bookings are replaced, still 2
+-- run again: still 2 bookings
 CALL sp_book_trip_accommodation(1);
 SELECT COUNT(*) AS bookings_of_trip_1 FROM room_usage WHERE ru_trip_id = 1;
 
--- trip 3 has 3 paid passengers -> 2 rooms per stay
+-- trip 3: 3 passengers -> 2 rooms
 CALL sp_book_trip_accommodation(3);
 
--- all or nothing: London Stay has no rooms left, so the Paris booking goes too
+-- London full -> the Paris booking is deleted too
 UPDATE lodging SET lg_total_rooms = 0 WHERE lg_id = 2;
 -- should fail: no lodging in London with 1 free room(s)
 CALL sp_book_trip_accommodation(1);
 SELECT COUNT(*) AS bookings_of_trip_1 FROM room_usage WHERE ru_trip_id = 1;
 
--- the only passenger of trip 12 has not confirmed yet: nothing to book
+-- trip 12 with no confirmed passengers
 UPDATE reservation SET res_status = 'PENDING' WHERE res_tr_id = 12;
 -- should fail: no confirmed or paid reservations
 CALL sp_book_trip_accommodation(12);
@@ -251,36 +244,38 @@ ROLLBACK;
 -- 3.1.3.4 History queries, with and without the indexes
 SHOW INDEX FROM trip_history;
 
--- (a) the revenue of the trips between two dates
+-- (a) revenue between two dates
 CALL sp_history_revenue('2021-01-01', '2021-12-31');
 
--- with the index: type range, key idx_hist_dep_rev, Extra "Using index"
+-- with the index: range, Using index
 EXPLAIN SELECT SUM(th_revenue) FROM trip_history
 WHERE th_departure BETWEEN '2021-01-01' AND '2021-12-31';
 
--- the same query forbidden to use it: type ALL, the whole table
+-- without the index: ALL (full scan)
 EXPLAIN SELECT SUM(th_revenue) FROM trip_history IGNORE INDEX (idx_hist_dep_rev)
 WHERE th_departure BETWEEN '2021-01-01' AND '2021-12-31';
 
--- (b) the dates of the trips that had exactly 3 destinations
+-- (b) dates of the trips with 3 destinations
 CALL sp_history_destinations(3);
 
--- with the index: key idx_hist_dc_dep, Extra "Using index"
+-- with the index: ref, Using index
 EXPLAIN SELECT th_departure FROM trip_history WHERE th_dest_count = 3;
 
--- the same query forbidden to use it: type ALL, the whole table
+-- without the index: ALL (full scan)
 EXPLAIN SELECT th_departure FROM trip_history IGNORE INDEX (idx_hist_dc_dep)
 WHERE th_dest_count = 3;
 
--- the time of (a) and of (b), each without and with its index
+-- times of (a) and (b) without and with the index
+SET profiling_history_size = 0;
+SET profiling_history_size = 100;
 SET profiling = 1;
 SELECT SUM(th_revenue) FROM trip_history IGNORE INDEX (idx_hist_dep_rev)
 WHERE th_departure BETWEEN '2021-01-01' AND '2021-12-31';
 SELECT SUM(th_revenue) FROM trip_history
 WHERE th_departure BETWEEN '2021-01-01' AND '2021-12-31';
-SELECT th_departure FROM trip_history IGNORE INDEX (idx_hist_dc_dep)
+SELECT COUNT(th_departure) FROM trip_history IGNORE INDEX (idx_hist_dc_dep)
 WHERE th_dest_count = 3;
-SELECT th_departure FROM trip_history
+SELECT COUNT(th_departure) FROM trip_history
 WHERE th_dest_count = 3;
 SHOW PROFILES;
 SET profiling = 0;
@@ -289,25 +284,25 @@ SET profiling = 0;
 -- 3.1.4.1 Log triggers
 START TRANSACTION;
 
--- the log starts empty in the demo state
+-- log is empty at the start
 SELECT COUNT(*) AS log_rows FROM log_actions;
 
--- three changes to a customer
+-- insert, update, delete a customer
 INSERT INTO customer (cust_name, cust_lname, cust_email, cust_birth_date)
 VALUES ('Demo', 'Customer', 'demo@mail.com', '1990-05-05');
 UPDATE customer SET cust_phone = '2101234567' WHERE cust_lname = 'Customer';
 DELETE FROM customer WHERE cust_lname = 'Customer';
 
--- a vehicle goes to maintenance, a reservation is made
+-- change a vehicle, add a reservation
 UPDATE vehicle SET v_status = 'Maintenance' WHERE v_id = 10;
 INSERT INTO reservation (res_tr_id, res_seatnum, res_cust_id, res_status, res_total_cost)
 VALUES (5, 9, 1, 'PENDING', 550);
 
--- every change is there, with the account, the time and the details
+-- the log rows
 SELECT log_id, log_timestamp, log_dba_username, log_table_name, log_action_type, log_details
 FROM log_actions ORDER BY log_id;
 
--- the account must be a registered DBA: remove it and try again
+-- remove the current user from dba_users
 DELETE FROM log_actions WHERE log_id > 0;
 DELETE FROM dba_users WHERE dba_username = SUBSTRING_INDEX(USER(), '@', 1);
 -- should fail: foreign key constraint fails
@@ -315,7 +310,6 @@ INSERT INTO customer (cust_name, cust_lname) VALUES ('Not', 'ADba');
 
 ROLLBACK;
 
--- (the ROLLBACK brought the account back)
 SELECT * FROM dba_users;
 
 
@@ -324,7 +318,7 @@ START TRANSACTION;
 
 SELECT lg_id, lg_name, lg_cost_per_night FROM lodging WHERE lg_id = 3;
 
--- 1-4 October, 3 rooms at Berlin Plaza - no nights or cost given
+-- 1-4 October, 3 rooms, no nights/cost given
 INSERT INTO room_usage (ru_trip_id, ru_lodging_id, ru_checkin, ru_checkout, ru_rooms_count)
 VALUES (11, 3, '2026-10-01', '2026-10-04', 3);
 
@@ -346,21 +340,21 @@ ROLLBACK;
 -- 3.1.4.3 Trigger: completing a trip frees the vehicle
 START TRANSACTION;
 
--- put bus 9 on trip 14 through the procedure of 3.1.3.1: InUse, 90 500 km
+-- assign bus 9 to trip 14 (InUse, 90 500 km)
 CALL sp_assign_vehicle_to_trip(14, 9, 90500);
 SELECT v_id, v_status, v_mileage FROM vehicle WHERE v_id = 9;
 
--- the trip is over, 350 km
+-- trip completed with 350 km
 UPDATE trip SET tr_status = 'COMPLETED', tr_km = 350 WHERE tr_id = 14;
 
 -- Available, 90 850 km
 SELECT v_id, v_status, v_mileage FROM vehicle WHERE v_id = 9;
 
--- changing the km of a trip that is already COMPLETED adds nothing
+-- trip already COMPLETED: km not added again
 UPDATE trip SET tr_km = 400 WHERE tr_id = 14;
 SELECT v_id, v_status, v_mileage FROM vehicle WHERE v_id = 9;
 
--- another status (ACTIVE) leaves the vehicle of trip 2 alone
+-- other status (ACTIVE): vehicle not changed
 SELECT v_id, v_status, v_mileage FROM vehicle WHERE v_id = 2;
 UPDATE trip SET tr_status = 'ACTIVE' WHERE tr_id = 2;
 SELECT v_id, v_status, v_mileage FROM vehicle WHERE v_id = 2;
@@ -381,12 +375,12 @@ SELECT cust_id, cust_name, cust_birth_date,
        TIMESTAMPDIFF(YEAR, cust_birth_date, CURDATE()) AS age
 FROM customer WHERE cust_id IN (1, 20);
 
--- an adult: 500.00
+-- adult: 500.00
 INSERT INTO reservation (res_tr_id, res_seatnum, res_cust_id, res_status, res_total_cost)
 VALUES (1, 10, 1, 'PENDING', 0);
 CALL sp_calculate_reservation_cost(1, 10, 1);
 
--- a child: 300.00
+-- child: 300.00
 INSERT INTO reservation (res_tr_id, res_seatnum, res_cust_id, res_status, res_total_cost)
 VALUES (1, 11, 20, 'PENDING', 0);
 CALL sp_calculate_reservation_cost(1, 11, 20);
@@ -405,7 +399,7 @@ ROLLBACK;
 CALL sp_branch_financials(1, @revenue, @expenses, @ratio);
 SELECT @revenue AS revenue, @expenses AS expenses, @ratio AS profit_ratio;
 
--- an unknown branch: three NULLs, not an error
+-- unknown branch: NULLs
 CALL sp_branch_financials(999, @revenue, @expenses, @ratio);
 SELECT @revenue AS revenue, @expenses AS expenses, @ratio AS profit_ratio;
 
@@ -413,11 +407,11 @@ SELECT @revenue AS revenue, @expenses AS expenses, @ratio AS profit_ratio;
 -- GUI Staff: salary trigger (profit needed, max +2%)
 START TRANSACTION;
 
--- with the seed data branch 1 pays more than it takes in
+-- branch 1 has a loss
 -- should fail: branch is not profitable
 UPDATE worker SET wrk_salary = wrk_salary * 1.01 WHERE wrk_AT = 'AT101';
 
--- lowering is always allowed: branch 1 now earns more than it pays
+-- lowering salaries is allowed, now branch 1 has a profit
 UPDATE worker SET wrk_salary = 100 WHERE wrk_br_code = 1;
 CALL sp_branch_financials(1, @revenue, @expenses, @ratio);
 SELECT @revenue AS revenue, @expenses AS expenses, @ratio AS profit_ratio;
@@ -425,7 +419,7 @@ SELECT @revenue AS revenue, @expenses AS expenses, @ratio AS profit_ratio;
 -- +1 %
 UPDATE worker SET wrk_salary = 101 WHERE wrk_AT = 'AT101';
 
--- exactly +2 % is still allowed (100 -> 102)
+-- +2% (100 -> 102) is allowed
 UPDATE worker SET wrk_salary = 100 WHERE wrk_AT = 'AT101';
 UPDATE worker SET wrk_salary = 102 WHERE wrk_AT = 'AT101';
 
@@ -437,7 +431,7 @@ SELECT wrk_AT, wrk_salary FROM worker WHERE wrk_AT = 'AT101';
 ROLLBACK;
 
 
--- check: same numbers as before the demo
+-- same numbers as before the demo
 SELECT (SELECT COUNT(*) FROM customer)    AS customers,
        (SELECT COUNT(*) FROM reservation) AS reservations,
        (SELECT COUNT(*) FROM room_usage)  AS room_usage_rows,
